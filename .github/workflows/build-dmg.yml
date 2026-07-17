@@ -1,0 +1,27 @@
+name: Build macOS DMG
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fix executable bit
+        run: chmod +x "La Base de Sky.app/Contents/MacOS/Z-universal"
+
+      - name: Create DMG
+        run: |
+          mkdir dmg_tmp
+          cp -R "La Base de Sky.app" dmg_tmp/
+          ln -s /Applications dmg_tmp/Applications
+          hdiutil create -volname "La Base de Sky" \
+            -srcfolder dmg_tmp -ov -format UDZO \
+            "La Base de Sky.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LaBaseDeSky-macos-dmg
+          path: "La Base de Sky.dmg"
