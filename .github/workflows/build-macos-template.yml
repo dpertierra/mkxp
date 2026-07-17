@@ -17,7 +17,7 @@ jobs:
             macos/Dependencies/build-macosx-arm64
             macos/Dependencies/build-macosx-universal
             macos/Dependencies/downloads
-          key: mac-${{ hashFiles('macos/Dependencies/*.make', 'macos/Dependencies/*.sh') }}
+          key: mac-${{ hashFiles('macos/Dependencies/*.make', 'macos/Dependencies/*.sh', 'macos/Dependencies/*.patch') }}
 
       - name: Install Homebrew tools
         run: |
