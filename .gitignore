@@ -75,3 +75,5 @@ DerivedData/
 
 ## Gcc Patch
 /*.gcno
+
+.gitlab-ci.yml
