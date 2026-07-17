@@ -429,7 +429,11 @@ int main(int argc, char *argv[]) {
     SDL_GetWindowSize(win, &winW, &winH);
     rtData.windowSizeMsg.post(Vec2i(winW, winH));
     
+#ifdef MKXPZ_BUILD_XCODE
+    getWindowBackingSize(win, &drwW, &drwH);
+#else
     SDL_GL_GetDrawableSize(win, &drwW, &drwH);
+#endif
     rtData.drawableSizeMsg.post(Vec2i(drwW, drwH));
 
     /* Load and post key bindings */

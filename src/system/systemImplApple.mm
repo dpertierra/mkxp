@@ -8,9 +8,25 @@
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
 
+#import <SDL_syswm.h>
+
 #import <sys/sysctl.h>
 #import "system.h"
 #import "SettingsMenuController.h"
+
+void getWindowBackingSize(SDL_Window *win, int *w, int *h) {
+    @autoreleasepool {
+        SDL_SysWMinfo info{};
+        if (SDL_GetWindowWMInfo(win, &info) && info.subsystem == SDL_SYSWM_COCOA) {
+            NSView *view = info.info.cocoa.window.contentView;
+            NSSize backing = [view convertSizeToBacking:view.bounds.size];
+            *w = (int)backing.width;
+            *h = (int)backing.height;
+        } else {
+            SDL_GL_GetDrawableSize(win, w, h);
+        }
+    }
+}
 
 std::string systemImpl::getSystemLanguage() {
     @autoreleasepool {

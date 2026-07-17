@@ -270,7 +270,11 @@ void EventThread::process(RGSSThreadData &rtData)
                         winH = event.window.data2;
                         
                         int drwW, drwH;
+#ifdef MKXPZ_BUILD_XCODE
+                        getWindowBackingSize(win, &drwW, &drwH);
+#else
                         SDL_GL_GetDrawableSize(win, &drwW, &drwH);
+#endif
                         
                         windowSizeMsg.post(Vec2i(winW, winH));
                         drawableSizeMsg.post(Vec2i(drwW, drwH));

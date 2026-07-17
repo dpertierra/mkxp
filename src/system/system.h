@@ -40,9 +40,13 @@ WineHostType getRealHostType();
 }
 
 #ifdef MKXPZ_BUILD_XCODE
+struct SDL_Window;
 std::string getPlistValue(const char *key);
 void openSettingsWindow();
 bool isMetalSupported();
+/* Actual drawable size in pixels; SDL_GL_GetDrawableSize misreports
+ * Retina backing sizes when using ANGLE on macOS */
+void getWindowBackingSize(SDL_Window *win, int *w, int *h);
 #endif
 
 namespace mkxp_sys = systemImpl;
