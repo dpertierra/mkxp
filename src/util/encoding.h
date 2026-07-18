@@ -18,6 +18,25 @@
 
 namespace Encoding {
 
+static bool isValidUTF8(const std::string &str) {
+    const unsigned char *s = (const unsigned char *)str.data();
+    size_t i = 0, n = str.size();
+    while (i < n) {
+        if (s[i] < 0x80) { i++; continue; }
+        if (s[i] < 0xC2) return false; // stray continuation or overlong lead
+        int len;
+        if ((s[i] & 0xE0) == 0xC0) len = 2;
+        else if ((s[i] & 0xF0) == 0xE0) len = 3;
+        else if ((s[i] & 0xF8) == 0xF0) len = 4;
+        else return false;
+        if (i + len > n) return false;
+        for (int j = 1; j < len; j++)
+            if ((s[i + j] & 0xC0) != 0x80) return false;
+        i += len;
+    }
+    return true;
+}
+
 static std::string getCharset(std::string &str) {
     uchardet_t ud = uchardet_new();
     uchardet_handle_data(ud, str.c_str(), str.length());
@@ -32,9 +51,15 @@ static std::string getCharset(std::string &str) {
 }
 
 static std::string convertString(std::string &str) {
-    
+
+    // uchardet (especially older versions) misdetects valid UTF-8 as
+    // MacRoman/windows-1252 on short or mostly-ASCII strings, mangling
+    // e.g. accented window titles. Skip detection if it's already valid UTF-8.
+    if (isValidUTF8(str))
+        return std::string(str);
+
     std::string charset = getCharset(str);
-    
+
     // Conversion doesn't need to happen if it's already UTF-8
     if (!strcmp(charset.c_str(), "UTF-8") || !strcmp(charset.c_str(), "ASCII")) {
         return std::string(str);
