@@ -495,7 +495,27 @@ void EventThread::process(RGSSThreadData &rtData)
                         break;
                         
                     case REQUEST_WINRESIZE :
-                        SDL_SetWindowSize(win, event.window.data1, event.window.data2);
+                        if (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP)
+                        {
+                            /* SDL_SetWindowSize is a no-op while fullscreen, so
+                             * no SIZE_CHANGED event fires and the framebuffer
+                             * offsets never get recomputed for the new in-game
+                             * resolution. Re-post the current size to force that
+                             * recalculation (see GraphicsPrivate::checkResize). */
+                            int cw, ch, dw, dh;
+                            SDL_GetWindowSize(win, &cw, &ch);
+#ifdef MKXPZ_BUILD_XCODE
+                            getWindowBackingSize(win, &dw, &dh);
+#else
+                            SDL_GL_GetDrawableSize(win, &dw, &dh);
+#endif
+                            windowSizeMsg.post(Vec2i(cw, ch));
+                            drawableSizeMsg.post(Vec2i(dw, dh));
+                        }
+                        else
+                        {
+                            SDL_SetWindowSize(win, event.window.data1, event.window.data2);
+                        }
                         rtData.rqWindowAdjust.clear();
                         break;
                         
