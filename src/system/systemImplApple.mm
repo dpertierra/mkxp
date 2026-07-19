@@ -7,7 +7,6 @@
 
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
-#import <QuartzCore/CAMetalLayer.h>
 
 #import <SDL_syswm.h>
 
@@ -30,12 +29,17 @@ void getWindowBackingSize(SDL_Window *win, int *w, int *h) {
 }
 
 static void applyScaleToLayerTree(CALayer *layer, CGFloat scale) {
-    if ([layer isKindOfClass:[CAMetalLayer class]]) {
-        CAMetalLayer *metal = (CAMetalLayer *)layer;
-        metal.contentsScale = scale;
-        CGSize b = metal.bounds.size;
-        metal.drawableSize = CGSizeMake(b.width * scale, b.height * scale);
+    layer.contentsScale = scale;
+
+    /* Only CAMetalLayer has -setDrawableSize:; detect it by selector so we
+     * don't reference the class symbol (avoids linking QuartzCore's Metal
+     * layer into every target). */
+    if ([layer respondsToSelector:@selector(setDrawableSize:)]) {
+        CGSize b = layer.bounds.size;
+        NSValue *v = [NSValue valueWithSize:NSMakeSize(b.width * scale, b.height * scale)];
+        [layer setValue:v forKey:@"drawableSize"];
     }
+
     for (CALayer *sub in layer.sublayers)
         applyScaleToLayerTree(sub, scale);
 }
