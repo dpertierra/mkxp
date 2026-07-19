@@ -28,11 +28,15 @@ bool filesystemImpl::fileExists(const char *path) {
 
 std::string filesystemImpl::contentsOfFileAsString(const char *path) {
     @autoreleasepool {
-        NSString *fileContents = [NSString stringWithContentsOfFile: PATHTONS(path)];
-        if (fileContents == nil)
+        /* Read raw bytes; encoding detection/conversion happens later in
+         * Encoding::convertString. stringWithContentsOfFile: guesses the
+         * encoding and falls back to MacRoman for BOM-less UTF-8, mangling
+         * accented characters before we ever see them. */
+        NSData *data = [NSData dataWithContentsOfFile: PATHTONS(path)];
+        if (data == nil)
             throw Exception(Exception::NoFileError, "Failed to read file at %s", path);
-        
-        return std::string(fileContents.UTF8String);
+
+        return std::string((const char *)data.bytes, data.length);
     }
 }
 
@@ -96,13 +100,13 @@ std::string filesystemImpl::getPathForAsset(const char *baseName, const char *ex
 std::string filesystemImpl::contentsOfAssetAsString(const char *baseName, const char *ext) {
     @autoreleasepool {
         NSString *path = getPathForAsset_internal(baseName, ext);
-        NSString *fileContents = [NSString stringWithContentsOfFile: path];
-        
+        NSData *data = [NSData dataWithContentsOfFile: path];
+
         // This should never fail
-        if (fileContents == nil)
+        if (data == nil)
             throw Exception(Exception::MKXPError, "Failed to read file at %s", path.UTF8String);
-        
-        return std::string(fileContents.UTF8String);
+
+        return std::string((const char *)data.bytes, data.length);
     }
 }
 

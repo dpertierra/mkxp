@@ -46,6 +46,10 @@
 #include "input.h"
 #include "sprite.h"
 
+#ifdef MKXPZ_BUILD_XCODE
+#include "system/system.h"
+#endif
+
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_timer.h>
@@ -966,6 +970,21 @@ struct GraphicsPrivate {
     }
     
     void checkResize(bool skipIntScaleBuffer = false) {
+#ifdef MKXPZ_BUILD_XCODE
+        /* Moving the window between displays with different backing scale
+         * factors doesn't reliably deliver SDL_WINDOWEVENT_SIZE_CHANGED
+         * (and ANGLE won't tell us either), so poll the real drawable size
+         * and synthesize the resize if it drifted. */
+        int drwW, drwH;
+        getWindowBackingSize(threadData->window, &drwW, &drwH);
+        if (drwW > 0 && drwH > 0 && (drwW != winSize.x || drwH != winSize.y))
+        {
+            int winW, winH;
+            SDL_GetWindowSize(threadData->window, &winW, &winH);
+            threadData->windowSizeMsg.post(Vec2i(winW, winH));
+            threadData->drawableSizeMsg.post(Vec2i(drwW, drwH));
+        }
+#endif
         if (threadData->windowSizeMsg.poll(winSize)) {
             /* Query the actual size in pixels, not units */
             Vec2i drawableSize(winSize);
