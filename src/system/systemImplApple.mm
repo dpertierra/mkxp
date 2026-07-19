@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
 
 #import <SDL_syswm.h>
 
@@ -25,6 +26,37 @@ void getWindowBackingSize(SDL_Window *win, int *w, int *h) {
         } else {
             SDL_GL_GetDrawableSize(win, w, h);
         }
+    }
+}
+
+static void applyScaleToLayerTree(CALayer *layer, CGFloat scale) {
+    if ([layer isKindOfClass:[CAMetalLayer class]]) {
+        CAMetalLayer *metal = (CAMetalLayer *)layer;
+        metal.contentsScale = scale;
+        CGSize b = metal.bounds.size;
+        metal.drawableSize = CGSizeMake(b.width * scale, b.height * scale);
+    }
+    for (CALayer *sub in layer.sublayers)
+        applyScaleToLayerTree(sub, scale);
+}
+
+bool syncWindowBackingScale(SDL_Window *win) {
+    @autoreleasepool {
+        SDL_SysWMinfo info{};
+        if (!SDL_GetWindowWMInfo(win, &info) || info.subsystem != SDL_SYSWM_COCOA)
+            return false;
+
+        NSView *view = info.info.cocoa.window.contentView;
+        CGFloat scale = info.info.cocoa.window.backingScaleFactor;
+        if (!view.layer)
+            return false;
+
+        /* Nothing to do if the root layer already matches */
+        if (view.layer.contentsScale == scale)
+            return false;
+
+        applyScaleToLayerTree(view.layer, scale);
+        return true;
     }
 }
 

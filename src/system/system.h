@@ -47,6 +47,10 @@ bool isMetalSupported();
 /* Actual drawable size in pixels; SDL_GL_GetDrawableSize misreports
  * Retina backing sizes when using ANGLE on macOS */
 void getWindowBackingSize(SDL_Window *win, int *w, int *h);
+/* Push the window's current backing scale onto every CAMetalLayer (ANGLE's
+ * included) so the Metal drawable follows the window across displays with
+ * different scale factors. Returns true if the scale actually changed. */
+bool syncWindowBackingScale(SDL_Window *win);
 #endif
 
 namespace mkxp_sys = systemImpl;

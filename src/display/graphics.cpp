@@ -976,6 +976,10 @@ struct GraphicsPrivate {
          * (and ANGLE won't tell us either), so poll the real drawable size
          * and synthesize the resize if it drifted. */
         int drwW, drwH;
+        /* Make ANGLE's Metal drawable follow the window's current backing
+         * scale before we read it, otherwise it stays at the old display's
+         * pixel size and the game renders into the wrong sized framebuffer. */
+        syncWindowBackingScale(threadData->window);
         getWindowBackingSize(threadData->window, &drwW, &drwH);
         if (drwW > 0 && drwH > 0 && (drwW != winSize.x || drwH != winSize.y))
         {
