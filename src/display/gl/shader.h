@@ -26,6 +26,8 @@
 #include "gl-util.h"
 #include "glstate.h"
 
+class ShaderNoConstructTag {};
+
 class Shader
 {
 public:
@@ -58,6 +60,7 @@ protected:
 
 	GLuint vertShader, fragShader;
 	GLuint program;
+	bool initialized;
     
 private:
 #ifdef MKXPZ_BUILD_XCODE
@@ -111,6 +114,7 @@ class SimpleShader : public ShaderBase
 {
 public:
 	SimpleShader();
+	SimpleShader(const ShaderNoConstructTag &);
 
 	void setTexOffsetX(int value);
 
@@ -134,6 +138,7 @@ class SimpleSpriteShader : public ShaderBase
 {
 public:
 	SimpleSpriteShader();
+	SimpleSpriteShader(const ShaderNoConstructTag &);
 
 	void setSpriteMat(const float value[16]);
 
@@ -190,7 +195,7 @@ public:
 	void setTone(const Vec4 &value);
 	void setColor(const Vec4 &value);
 	void setOpacity(float value);
-	void setBushDepth(float value);
+	void setBushDepth(bool bushY, bool bushUnder, float bushSlope, float bushIntercept);
 	void setBushOpacity(float value);
     void setPattern(const TEX::ID pattern, const Vec2 &dimensions);
     void setPatternBlendType(int blendType);
@@ -202,7 +207,8 @@ public:
     void setInvert(bool value);
 
 private:
-	GLint u_spriteMat, u_tone, u_opacity, u_color, u_bushDepth, u_bushOpacity, u_pattern, u_renderPattern,
+	GLint u_spriteMat, u_tone, u_opacity, u_color,
+    u_bushY, u_bushUnder, u_bushSlope, u_bushIntercept, u_bushOpacity, u_pattern, u_renderPattern,
     u_patternBlendType, u_patternSizeInv, u_patternTile, u_patternOpacity, u_patternScroll, u_patternZoom, u_invert;
 };
 
@@ -319,6 +325,9 @@ class BltShader : public ShaderBase
 {
 public:
 	BltShader();
+	BltShader(const ShaderNoConstructTag &);
+
+	void init();
 
 	void setSource();
 	void setDestination(const TEX::ID value);
@@ -330,10 +339,51 @@ private:
 	GLint u_source, u_destination, u_subRect, u_opacity;
 };
 
+class KglInvertShader : public ShaderBase
+{
+public:
+	KglInvertShader();
+};
+
+class KglCompressAlphaShader : public ShaderBase
+{
+public:
+	KglCompressAlphaShader();
+};
+
+class KglSubtractShader : public BltShader
+{
+public:
+	KglSubtractShader();
+};
+
+class KglShadowShaderH : public ShaderBase
+{
+public:
+	KglShadowShaderH();
+
+	void setParams(int x1, int x2, int y, bool soft, int w, int h, int x_center, int y_center, double slope1, double slope2);
+
+private:
+	GLint u_x1, u_x2, u_y, u_soft, u_w, u_h, u_x_center, u_y_center, u_slope1, u_slope2;
+};
+
+class KglShadowShaderV : public ShaderBase
+{
+public:
+	KglShadowShaderV();
+
+	void setParams(int y1, int y2, int x, bool wall, bool soft, int w, int h, int x_center, int y_center, double slope1, double slope2);
+
+private:
+	GLint u_y1, u_y2, u_x, u_wall, u_soft, u_w, u_h, u_x_center, u_y_center, u_slope1, u_slope2;
+};
+
 class Lanczos3Shader : public SimpleShader
 {
 public:
 	Lanczos3Shader();
+	Lanczos3Shader(const ShaderNoConstructTag &);
 
 	void setTexSize(const Vec2i &value);
 
@@ -369,6 +419,7 @@ class Lanczos3SpriteShader : public SimpleSpriteShader
 {
 public:
 	Lanczos3SpriteShader();
+	Lanczos3SpriteShader(const ShaderNoConstructTag &);
 
 	void setTexSize(const Vec2i &value);
 
@@ -419,6 +470,11 @@ struct ShaderSet
 	SimpleMatrixShader simpleMatrix;
 	BlurShader blur;
 	TilemapVXShader tilemapVX;
+	KglInvertShader kglInvert;
+	KglCompressAlphaShader kglCompressAlpha;
+	KglSubtractShader kglSubtract;
+	KglShadowShaderH kglShadowH;
+	KglShadowShaderV kglShadowV;
 	BicubicShader bicubic;
 	Lanczos3Shader lanczos3;
 #ifdef MKXPZ_SSL

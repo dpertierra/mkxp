@@ -50,22 +50,13 @@ static std::string getCharset(std::string &str) {
     return ret;
 }
 
-static std::string convertString(std::string &str) {
-
-    // uchardet (especially older versions) misdetects valid UTF-8 as
-    // MacRoman/windows-1252 on short or mostly-ASCII strings, mangling
-    // e.g. accented window titles. Skip detection if it's already valid UTF-8.
-    if (isValidUTF8(str))
-        return std::string(str);
-
-    std::string charset = getCharset(str);
-
+static std::string convertString(std::string &str, const char *charset) {
     // Conversion doesn't need to happen if it's already UTF-8
-    if (!strcmp(charset.c_str(), "UTF-8") || !strcmp(charset.c_str(), "ASCII")) {
+    if (!strcmp(charset, "UTF-8") || !strcmp(charset, "ASCII")) {
         return std::string(str);
     }
     
-    iconv_t cd = iconv_open("UTF-8", charset.c_str());
+    iconv_t cd = iconv_open("UTF-8", charset);
     
     size_t inLen = str.size();
     size_t outLen = inLen * 4;
@@ -83,10 +74,24 @@ static std::string convertString(std::string &str) {
         buf.resize(buf.size()-outLen);
     }
     else {
-        throw Exception(Exception::MKXPError, "Unable to convert string (Guessed encoding: %s)", charset.c_str());
+        throw Exception(Exception::MKXPError, "Unable to convert string (Guessed encoding: %s)", charset);
     }
     
     return buf;
+}
+
+static std::string convertString(std::string &str) {
+    /* uchardet (especially older versions) misdetects valid UTF-8 as
+     * MacRoman/windows-1252 on short or mostly-ASCII input, mangling e.g. an
+     * accented windowTitle in mkxp.json. Skip detection if it's already valid
+     * UTF-8. See https://github.com/mkxp-z/mkxp-z/issues/373.
+     *
+     * The overload above deliberately doesn't do this: its callers know the
+     * charset, and UTF-16/UTF-32 text can pass an UTF-8 validity check. */
+    if (isValidUTF8(str))
+        return std::string(str);
+
+    return convertString(str, getCharset(str).c_str());
 }
 }
 
