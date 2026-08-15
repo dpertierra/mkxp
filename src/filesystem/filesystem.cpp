@@ -262,7 +262,7 @@ static void initReadOps(PHYSFS_File *handle, SDL_RWops &ops, bool freeOnClose) {
 
 static void strTolower(std::string &str) {
   for (size_t i = 0; i < str.size(); ++i)
-    str[i] = tolower(str[i]);
+    str[i] = tolower((unsigned char)str[i]);
 }
 
 const Uint32 SDL_RWOPS_PHYSFS = SDL_RWOPS_UNKNOWN + 10;
@@ -376,6 +376,9 @@ struct CacheEnumData {
   /* Converts in-place */
   void toNFC(char *inout) {
 #ifdef __APPLE__
+    if (nfd2nfc == (iconv_t)-1)
+      return;
+
     size_t srcSize = strlen(inout);
     size_t bufSize = sizeof(buf);
     char *bufPtr = buf;
@@ -384,7 +387,14 @@ struct CacheEnumData {
     /* Reserve room for null terminator */
     --bufSize;
 
-    iconv(nfd2nfc, &inoutPtr, &srcSize, &bufPtr, &bufSize);
+    /* On failure iconv stops at the offending byte, which would leave us with
+     * a truncated (or empty) path. Keep the original name instead: a name we
+     * can't normalize is still better than one we've cut in half. */
+    if (iconv(nfd2nfc, &inoutPtr, &srcSize, &bufPtr, &bufSize) == (size_t)-1) {
+      iconv(nfd2nfc, 0, 0, 0, 0);
+      return;
+    }
+
     /* Null-terminate */
     *bufPtr = 0;
     strcpy(inout, buf);
@@ -430,7 +440,12 @@ static PHYSFS_EnumerateCallbackResult cacheEnumCB(void *d, const char *origdir,
      * traversing and append this filename to it */
     std::vector<std::string> &list = *data.fileLists.top();
 
-    std::string lowerFilename(fname);
+    /* Take the name from fullPath, which toNFC() has already normalized, not
+     * from the raw fname: on an NFD volume the two differ for any accented
+     * name, and openRead() matches these entries against a request that
+     * arrives in NFC, so "Routé 1.mid" would never be found. */
+    const char *slash = strrchr(fullPath, '/');
+    std::string lowerFilename(slash ? slash + 1 : fullPath);
     strTolower(lowerFilename);
     list.push_back(lowerFilename);
 
@@ -480,7 +495,7 @@ static PHYSFS_EnumerateCallbackResult fontSetEnumCB(void *data, const char *dir,
   size_t i;
 
   for (i = 0; i < sizeof(lowExt) - 1 && ext[i]; ++i)
-    lowExt[i] = tolower(ext[i]);
+    lowExt[i] = tolower((unsigned char)ext[i]);
   lowExt[i] = '\0';
 
   if (strcmp(lowExt, "ttf") && strcmp(lowExt, "otf"))
@@ -513,7 +528,7 @@ findFontsFolderCB(void *data, const char *, const char *fname) {
   const char *s = fname;
 
   while (*s && i < sizeof(buffer))
-    buffer[i++] = tolower(*s++);
+    buffer[i++] = tolower((unsigned char)*s++);
 
   buffer[i] = '\0';
 
@@ -619,7 +634,7 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
 
   if (p->havePathCache)
     for (size_t i = 0; i < len; ++i)
-      buffer[i] = tolower(buffer[i]);
+      buffer[i] = tolower((unsigned char)buffer[i]);
 
   /* Find the deliminator separating directory and file name */
   for (delim = buffer + len; delim > buffer; --delim)

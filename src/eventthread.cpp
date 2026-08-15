@@ -194,8 +194,26 @@ void EventThread::process(RGSSThreadData &rtData)
     }
     
     char buffer[128];
-    
+
     char pendingTitle[128];
+    /* Truncates s at the last complete UTF-8 sequence. SDL_SetWindowTitle
+     * expects valid UTF-8, so a title cut mid-character (these buffers are
+     * only 128 bytes) renders as garbage. See mkxp-z#373. */
+    auto trimPartialUTF8 = [](char *s) {
+        size_t i = 0, n = strlen(s);
+        while (i < n) {
+            unsigned char c = s[i];
+            size_t len = c < 0x80             ? 1
+                       : (c & 0xE0) == 0xC0   ? 2
+                       : (c & 0xF0) == 0xE0   ? 3
+                       : (c & 0xF8) == 0xF0   ? 4
+                                              : 0;
+            if (len == 0 || i + len > n)
+                break;
+            i += len;
+        }
+        s[i] = '\0';
+    };
     bool havePendingTitle = false;
     
     bool resetting = false;
@@ -384,8 +402,11 @@ void EventThread::process(RGSSThreadData &rtData)
                         if (fullscreen)
                         {
                             /* Prevent fullscreen flicker */
-                            strncpy(pendingTitle, rtData.config.windowTitle.c_str(),
-                                    sizeof(pendingTitle));
+                            /* strncpy leaves pendingTitle unterminated when the
+                             * title fills the buffer; snprintf always terminates */
+                            snprintf(pendingTitle, sizeof(pendingTitle), "%s",
+                                     rtData.config.windowTitle.c_str());
+                            trimPartialUTF8(pendingTitle);
                             havePendingTitle = true;
                             
                             break;
@@ -541,6 +562,10 @@ void EventThread::process(RGSSThreadData &rtData)
                     case REQUEST_TEXTMODE :
                         if (event.user.code)
                         {
+                            {
+                                const SDL_Rect rect = {0, 0, 1, 1};
+                                SDL_SetTextInputRect(&rect);
+                            }
                             SDL_StartTextInput();
                             lockText(true);
                             textInputBuffer.clear();
@@ -601,12 +626,13 @@ void EventThread::process(RGSSThreadData &rtData)
                         
                         snprintf(buffer, sizeof(buffer), "%s - %d FPS",
                                  rtData.config.windowTitle.c_str(), event.user.code);
-                        
+                        trimPartialUTF8(buffer);
+
                         /* Updating the window title in fullscreen
                          * mode seems to cause flickering */
                         if (fullscreen)
                         {
-                            strncpy(pendingTitle, buffer, sizeof(pendingTitle));
+                            snprintf(pendingTitle, sizeof(pendingTitle), "%s", buffer);
                             havePendingTitle = true;
                             
                             break;
