@@ -197,8 +197,11 @@ struct SpritePrivate
         }
         
         quad.setPosRect(FloatRect(0, 0, rect.w, rect.h));
+        /* The taper is defined against the quad's own edges, so the transform
+         * has to be told how big it is whenever that changes. */
+        trans.setLocalSize(Vec2(rect.w, rect.h));
         recomputeBushDepth();
-        
+
         wave.dirty = true;
     }
     
@@ -233,8 +236,11 @@ struct SpritePrivate
         
         /* If sprite is zoomed/rotated, just opt out for now
          * for simplicity's sake */
+        /* A taper widens the quad past the bounding box computed below, so it
+         * opts out of the check for the same reason zoom and rotation do. */
         const Vec2 &scale = trans.getScale();
-        if (scale.x != 1 || scale.y != 1 || trans.getRotation() != 0)
+        if (scale.x != 1 || scale.y != 1 || trans.getRotation() != 0 ||
+            trans.getTaper() != 1)
         {
             isVisible = true;
             return;
@@ -364,6 +370,7 @@ DEF_ATTR_RD_SIMPLE(Sprite, OY,         int,     p->trans.getOrigin().y)
 DEF_ATTR_RD_SIMPLE(Sprite, ZoomX,      float,   p->trans.getScale().x)
 DEF_ATTR_RD_SIMPLE(Sprite, ZoomY,      float,   p->trans.getScale().y)
 DEF_ATTR_RD_SIMPLE(Sprite, Angle,      float,   p->trans.getRotation())
+DEF_ATTR_RD_SIMPLE(Sprite, Taper,      float,   p->trans.getTaper())
 DEF_ATTR_RD_SIMPLE(Sprite, Mirror,     bool,    p->mirrored)
 DEF_ATTR_RD_SIMPLE(Sprite, BushDepth,  int,     p->bushDepth)
 DEF_ATTR_RD_SIMPLE(Sprite, BlendType,  int,     p->blendType)
@@ -490,11 +497,21 @@ void Sprite::setZoomY(float value)
 void Sprite::setAngle(float value)
 {
     guardDisposed();
-    
+
     if (p->trans.getRotation() == value)
         return;
-    
+
     p->trans.setRotation(value);
+}
+
+void Sprite::setTaper(float value)
+{
+    guardDisposed();
+
+    if (p->trans.getTaper() == value)
+        return;
+
+    p->trans.setTaper(value);
 }
 
 void Sprite::setMirror(bool mirrored)

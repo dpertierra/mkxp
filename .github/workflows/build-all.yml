@@ -1,0 +1,199 @@
+# Build manual de los tres ejecutables que distribuye La Base de Sky.
+#
+# A diferencia de autobuild.yml, que solo dispara en las ramas 'dev' y
+# 'autobuild', esta se lanza a mano desde cualquier rama:
+#   GitHub -> Actions -> "Build all platforms" -> Run workflow -> (elegir rama)
+#
+# Comparte los mismos pasos y las mismas claves de cache que autobuild.yml, asi
+# que si esa ya construyo las dependencias, esta las reutiliza y solo recompila
+# el motor.
+name: Build all platforms
+
+on:
+  workflow_dispatch:
+    inputs:
+      windows:
+        description: 'Construir Windows (Game.exe)'
+        type: boolean
+        default: true
+      linux:
+        description: 'Construir Linux (Game_Linux)'
+        type: boolean
+        default: true
+      macos:
+        description: 'Construir macOS (Z-universal.app.zip)'
+        type: boolean
+        default: true
+
+jobs:
+  build-windows:
+    name: Windows
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    steps:
+      - uses: benjlevesque/short-sha@v2.2
+        id: short-sha
+        with:
+          length: 7
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          install: >-
+            base-devel
+            git
+            ruby
+            vim
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-autotools
+            mingw-w64-x86_64-gcc
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            windows/build-mingw64
+            windows/downloads
+          key: win-${{ hashFiles('windows/Makefile') }}
+
+      - name: Build all dependencies
+        shell: msys2 {0}
+        run: |
+          cd windows
+          make
+
+      - name: Build exe
+        shell: msys2 {0}
+        run: |
+          source windows/vars.sh
+          meson setup build
+          cd build
+          ninja
+          strip ./mkxp-z.exe
+
+      - name: Prepare archive
+        shell: msys2 {0}
+        run: |
+          mkdir build/artifact
+          cd build/artifact
+          cp /mingw64/bin/libgomp-1.dll .
+          cp /mingw64/bin/zlib1.dll .
+          cp ../../windows/build-mingw64/bin/x64-msvcrt-ruby310.dll .
+          cp -r ../../windows/build-mingw64/lib/ruby/3.1.0 .
+          mv ./3.1.0 ./stdlib
+          cp ../mkxp-z.exe .
+          cp ../../mkxp.json .
+          cp -r ../../scripts .
+          cp ../../assets/LICENSE.mkxp-z-with-https.txt .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mkxp-z.windows.${{github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          path: build/artifact
+
+  build-linux:
+    name: Ubuntu 22.04 x86_64
+    if: ${{ inputs.linux }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: benjlevesque/short-sha@v2.2
+        id: short-sha
+        with:
+          length: 7
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            linux/build-x86_64
+            linux/downloads
+          key: lin-x86_64-${{ hashFiles('linux/Makefile') }}
+
+      - name: Install apt dependencies
+        run: |
+          sudo apt update
+          sudo apt install git wget build-essential cmake meson autoconf automake libtool pkg-config ruby bison xxd zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev -y
+
+      - name: Build everything else
+        run: |
+          cd linux
+          make
+
+      - name: Build executable
+        run: |
+          source linux/vars.sh
+          meson setup build --bindir=. --prefix=$GITHUB_WORKSPACE/build/local
+          cd build
+          ninja
+          ninja install
+
+      - name: Prepare archive
+        run: |
+          cd build/local
+          cp -r ../../linux/build-x86_64/lib/ruby/3.1.0 .
+          mv ./3.1.0 ./stdlib
+          cp ../../mkxp.json .
+          cp -r ../../scripts .
+          cp ../../assets/LICENSE.mkxp-z-with-https.txt .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          path: build/local
+
+  build-macos:
+    name: macOS
+    if: ${{ inputs.macos }}
+    runs-on: macos-latest
+    steps:
+      - uses: benjlevesque/short-sha@v2.2
+        id: short-sha
+        with:
+          length: 7
+
+      - name: Remove pre-existing homebrew packages
+        run: brew remove --force $(brew list)
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            macos/Dependencies/build-macosx-x86_64
+            macos/Dependencies/build-macosx-arm64
+            macos/Dependencies/build-macosx-universal
+            macos/Dependencies/downloads
+          key: mac-${{ hashFiles('macos/Dependencies/*.make', 'macos/Dependencies/*.sh') }}
+
+      - name: Install Homebrew tools
+        run: |
+          cd macos/Dependencies
+          brew bundle
+
+      - name: Build all dependencies
+        run: |
+          cd macos/Dependencies
+          ./setup.sh
+
+      - name: Build app
+        run: |
+          cd macos
+          xcodebuild -project mkxp-z.xcodeproj -configuration "Release" -scheme "Universal" -derivedDataPath "$GITHUB_WORKSPACE/build"
+
+      - name: Compress app
+        run: |
+          cd build/Build/Products/Release
+          cp ../../../../assets/LICENSE.mkxp-z-with-https.txt ./Z-universal.app/
+          ditto -c -k --sequesterRsrc --keepParent Z-universal.app Z-universal.app.zip
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkxp-z.macos.${{github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          path: build/Build/Products/Release/Z-universal.app.zip

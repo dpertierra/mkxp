@@ -76,6 +76,7 @@ DEF_GFX_PROP_I(Sprite, WaveSpeed)
 DEF_GFX_PROP_F(Sprite, ZoomX)
 DEF_GFX_PROP_F(Sprite, ZoomY)
 DEF_GFX_PROP_F(Sprite, Angle)
+DEF_GFX_PROP_F(Sprite, Taper)
 DEF_GFX_PROP_F(Sprite, WavePhase)
 DEF_GFX_PROP_F(Sprite, PatternZoomX)
 DEF_GFX_PROP_F(Sprite, PatternZoomY)
@@ -131,6 +132,7 @@ void spriteBindingInit() {
     INIT_PROP_BIND(Sprite, ZoomX, "zoom_x");
     INIT_PROP_BIND(Sprite, ZoomY, "zoom_y");
     INIT_PROP_BIND(Sprite, Angle, "angle");
+    INIT_PROP_BIND(Sprite, Taper, "taper");
     INIT_PROP_BIND(Sprite, Mirror, "mirror");
     INIT_PROP_BIND(Sprite, BushDepth, "bush_depth");
     INIT_PROP_BIND(Sprite, Opacity, "opacity");
