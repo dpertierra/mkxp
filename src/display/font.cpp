@@ -647,6 +647,11 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 		{
 			/* RGSS doesn't use font hinting */
 			TTF_SetFontHinting(font, p->fontHinting);
+
+			Debug() << "[FONTDBG] family=" << family << " reqSize=" << size
+			        << " fontScale=" << p->fontScale << " hiresMult=" << hiresMult
+			        << " ppem=" << ppem << " ppemMult=" << ppemMult
+			        << " hinting=" << p->fontHinting;
 		}
 	}
 	
