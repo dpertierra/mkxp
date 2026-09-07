@@ -186,10 +186,38 @@ RB_METHOD(graphicsHeight)
     return rb_fix_new(shState->graphics().height());
 }
 
+RB_METHOD(graphicsWindowWidth)
+{
+    RB_UNUSED_PARAM;
+
+    return rb_fix_new(shState->graphics().windowWidth());
+}
+
+RB_METHOD(graphicsWindowHeight)
+{
+    RB_UNUSED_PARAM;
+
+    return rb_fix_new(shState->graphics().windowHeight());
+}
+
+RB_METHOD(graphicsContentWidth)
+{
+    RB_UNUSED_PARAM;
+
+    return rb_fix_new(shState->graphics().displayContentWidth());
+}
+
+RB_METHOD(graphicsContentHeight)
+{
+    RB_UNUSED_PARAM;
+
+    return rb_fix_new(shState->graphics().displayContentHeight());
+}
+
 RB_METHOD(graphicsDisplayWidth)
 {
     RB_UNUSED_PARAM;
-    
+
     return rb_fix_new(shState->graphics().displayWidth());
 }
 
@@ -280,10 +308,11 @@ RB_METHOD(graphicsResizeScreen)
     RB_UNUSED_PARAM;
     
     int width, height;
-    rb_get_args(argc, argv, "ii", &width, &height RB_ARG_END);
-    
+    bool resizeWindow = true;
+    rb_get_args(argc, argv, "ii|b", &width, &height, &resizeWindow RB_ARG_END);
+
     GFX_LOCK;
-    shState->graphics().resizeScreen(width, height);
+    shState->graphics().resizeScreen(width, height, resizeWindow);
     GFX_UNLOCK;
     
     return Qnil;
@@ -434,6 +463,10 @@ void graphicsBindingInit()
     _rb_define_module_function(module, "height", graphicsHeight);
     _rb_define_module_function(module, "display_width", graphicsDisplayWidth);
     _rb_define_module_function(module, "display_height", graphicsDisplayHeight);
+    _rb_define_module_function(module, "window_width", graphicsWindowWidth);
+    _rb_define_module_function(module, "window_height", graphicsWindowHeight);
+    _rb_define_module_function(module, "content_width", graphicsContentWidth);
+    _rb_define_module_function(module, "content_height", graphicsContentHeight);
     _rb_define_module_function(module, "wait", graphicsWait);
     _rb_define_module_function(module, "fadeout", graphicsFadeout);
     _rb_define_module_function(module, "fadein", graphicsFadein);

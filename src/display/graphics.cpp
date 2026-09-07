@@ -1498,6 +1498,19 @@ int Graphics::displayContentHeight() const {
     return p->scSize.y;
 }
 
+/* Actual game window size, in logical units (ie. the same units
+ * resizeWindow() takes). Unlike displayWidth/Height, which report the
+ * monitor's current mode, these describe the window itself. */
+int Graphics::windowWidth() const {
+    p->checkResize();
+    return p->winSize.x / p->backingScaleFactor;
+}
+
+int Graphics::windowHeight() const {
+    p->checkResize();
+    return p->winSize.y / p->backingScaleFactor;
+}
+
 int Graphics::displayWidth() const {
     SDL_DisplayMode dm{};
     SDL_GetCurrentDisplayMode(SDL_GetWindowDisplayIndex(shState->sdlWindow()), &dm);
@@ -1510,7 +1523,7 @@ int Graphics::displayHeight() const {
     return dm.h / p->backingScaleFactor;
 }
 
-void Graphics::resizeScreen(int width, int height) {
+void Graphics::resizeScreen(int width, int height, bool resizeWindow) {
     p->threadData->rqWindowAdjust.wait();
     p->checkResize(true);
     
@@ -1541,8 +1554,25 @@ void Graphics::resizeScreen(int width, int height) {
     p->screenQuad.setTexPosRect(screenRect, screenRect);
     
     glState.scissorBox.set(IntRect(0, 0, p->scRes.x, p->scRes.y));
-    
-    shState->eThread().requestWindowResize(width, height);
+
+    if (resizeWindow)
+    {
+        shState->eThread().requestWindowResize(width, height);
+        return;
+    }
+
+    /* Keeping the window as-is means no SDL_WINDOWEVENT_SIZE_CHANGED will
+     * arrive, so checkResize() won't run and scSize/scOffset would keep
+     * describing the old resolution (breaking both the final blit and the
+     * mouse coordinate mapping). Recompute them here instead. */
+    if (p->integerScaleActive && p->findHighestIntegerScale())
+        p->rebuildIntegerScaleBuffer();
+
+    p->recalculateScreenSize(p->threadData->config.fixedAspectRatio);
+    p->updateScreenResoRatio(p->threadData);
+
+    SDL_Rect screen = {p->scOffset.x, p->scOffset.y, p->scSize.x, p->scSize.y};
+    p->threadData->ethread->notifyGameScreenChange(screen);
 }
 
 void Graphics::resizeWindow(int width, int height, bool center) {

@@ -234,6 +234,7 @@ $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.
 	-DSDL2IMAGE_JPG_SHARED=no \
 	-DSDL2IMAGE_JXL=yes \
 	-DSDL2IMAGE_JXL_SHARED=no \
+	-DSDL2IMAGE_SAMPLES=no \
 	-DSDL2IMAGE_VENDORED=yes
 
 $(DOWNLOADS)/sdl2_image/CMakeLists.txt:
@@ -266,7 +267,7 @@ $(LIBDIR)/libSDL2_ttf.a: $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile
 
 $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt
 	cd $(DOWNLOADS)/sdl2_ttf; mkdir cmakebuild; cd cmakebuild; \
-	$(CMAKE) -DBUILD_SHARED_LIBS=no
+	$(CMAKE) -DBUILD_SHARED_LIBS=no -DSDL2TTF_SAMPLES=no
 
 $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/mkxp-z/sdl_ttf $(DOWNLOADS)/sdl2_ttf
