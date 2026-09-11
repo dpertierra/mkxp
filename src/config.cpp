@@ -196,6 +196,7 @@ void Config::read(int argc, char *argv[]) {
         {"fontHinting", 3}, // TTF_HINTING_NONE
         {"fontHeightReporting", 0},
         {"fontOutlineCrop", true},
+        {"fontPixelSnap", false},
         {"rubyLoadpath", json::array({})},
         {"JITEnable", false},
         {"JITVerboseLevel", 0},
@@ -334,6 +335,7 @@ try { exp } catch (...) {}
     SET_OPT(fontHinting, integer);
     SET_OPT(fontHeightReporting, integer);
     SET_OPT(fontOutlineCrop, boolean);
+    SET_OPT(fontPixelSnap, boolean);
     fillStringVec(opts["rubyLoadpath"], rubyLoadpaths);
     
     auto &bnames = opts["bindingNames"].as_object();

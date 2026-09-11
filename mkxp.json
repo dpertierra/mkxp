@@ -458,6 +458,13 @@
     // (default: 0)
     // "fontHeightReporting": 0,
 
+    // Snaps font pixel sizes to the nearest size where pixel fonts render
+    // with zero anti-aliased edges (their design grid), fixing blurry
+    // pixel fonts. Only affects fonts that actually have a crisp size
+    // within +-8 px; regular AA fonts are left untouched.
+    // (default: false)
+    // "fontPixelSnap": false,
+
     // Crops top row and left column of text that has an outline.
     // Disabling it generally looks nicer, but RGSS enables it, so enabling it
     // should make text appearance more accurate.

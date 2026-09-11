@@ -123,6 +123,7 @@ struct Config {
     int fontHinting;
     int fontHeightReporting;
     bool fontOutlineCrop;
+    bool fontPixelSnap;
     
     std::vector<std::string> rubyLoadpaths;
 

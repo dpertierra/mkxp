@@ -148,6 +148,7 @@ struct SharedFontStatePrivate
 	float fontScale;
 	bool fontKerning;
 	int fontHinting;
+	bool fontPixelSnap;
 };
 
 SharedFontState::SharedFontState(const Config &conf)
@@ -176,6 +177,7 @@ SharedFontState::SharedFontState(const Config &conf)
 	}
 	p->fontKerning = conf.fontKerning;
 	p->fontHinting = conf.fontHinting;
+	p->fontPixelSnap = conf.fontPixelSnap;
 }
 
 SharedFontState::~SharedFontState()
@@ -279,260 +281,73 @@ void SharedFontState::initFontSetCB(SDL_RWops &ops,
 	TTF_CloseFont(font);
 }
 
-// https://github.com/wine-mirror/wine/blob/dc34fef45d491516fa8eaee45b2ae40faa7b0bfe/dlls/win32u/freetype.c
-
-/* The following code was derived from Wine to emulate
- * Windows's font size selection behavior. */
- 
-/* We're not currently using yMax and yMin for anything,
- * but it could be useful later. */
-typedef struct {
-	TTF_Font *font;
-	int ppem;
-	short yMax;
-	short yMin;
-} Font_Container;
-
-#define BYTE uint8_t
-#define WORD uint16_t
-#define DWORD uint32_t
-#define UINT unsigned int
-#define SHORT short
-#define USHORT unsigned short
-#define GDI_ERROR ~0u
-
-#define MS_MAKE_TAG(ch0, ch1, ch2, ch3)                                                 \
-                    ((uint32_t)(uint8_t)(ch0) | ((uint32_t)(uint8_t)(ch1) << 8) |       \
-                    ((uint32_t)(uint8_t)(ch2) << 16) | ((uint32_t)(uint8_t)(ch3) << 24))
-#define MS_VDMX_TAG MS_MAKE_TAG('V', 'D', 'M', 'X')
-
-/* Wine's code suggests the tables are stored in big endian format. */
-#define RTLUSHORTBYTESWAP(x) (uint16_t)((x >> 8) | (x << 8))
-#define RTLULONGBYTESWAP(x) (((uint32_t)RTLUSHORTBYTESWAP((uint16_t)x) << 16) | RTLUSHORTBYTESWAP((uint16_t)(x >> 16)))
-
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-#define GET_BE_WORD(x) (x)
-#else
-#define GET_BE_WORD(x) RTLUSHORTBYTESWAP(x)
-#endif
-
-static unsigned int freetype_get_font_data( Font_Container *font, uint32_t table,
-                                            unsigned int offset, void *buf, unsigned int cbData)
+/* Fraction of mid-gray (anti-aliased) alpha pixels in a rendered probe
+ * string. ~0 means the glyph edges fall exactly on the pixel grid,
+ * i.e. the font is a pixel font rendered at its design size. */
+static float probe_mid_gray_ratio(_TTF_Font *font)
 {
-	FT_Face ft_face = *(reinterpret_cast<FT_Face *>( font->font ));
-	FT_ULong len;
-	FT_Error err;
+	SDL_Color white = { 255, 255, 255, 255 };
+	SDL_Surface *surf = TTF_RenderUTF8_Blended(font, "Agy0", white);
+	if (!surf)
+		return 1.0f;
 
-	if (!FT_IS_SFNT(ft_face)) return GDI_ERROR;
-
-	if(!buf)
-		len = 0;
-	else
-		len = cbData;
-
-	/* MS tags differ in endianness from FT ones */
-	table = RTLULONGBYTESWAP( table );
-
-	/* make sure value of len is the value freetype says it needs */
-	if (buf && len)
+	uint32_t total = 0, gray = 0;
+	const int bpp = surf->format->BytesPerPixel;
+	for (int y = 0; y < surf->h; ++y)
 	{
-		FT_ULong needed = 0;
-		err = FT_Load_Sfnt_Table(ft_face, table, offset, NULL, &needed);
-		if(!err && needed < len)
-			len = needed;
+		const uint8_t *row = (const uint8_t *)surf->pixels + y * surf->pitch;
+		for (int x = 0; x < surf->w; ++x)
+		{
+			uint8_t alpha = bpp == 4 ? row[x * 4 + 3] : row[x];
+			if (alpha > 10)
+			{
+				++total;
+				if (alpha < 245)
+					++gray;
+			}
+		}
 	}
-	err = FT_Load_Sfnt_Table(ft_face, table, offset, (FT_Byte*)buf, &len);
-	if (err) /* Can't find table */
-		return GDI_ERROR;
-	return (int)len;
+	float ratio = total ? (float)gray / (float)total : 1.0f;
+	SDL_FreeSurface(surf);
+	return ratio;
 }
 
-typedef struct {
-	uint16_t version;
-	uint16_t numRecs;
-	uint16_t numRatios;
-} VDMX_Header;
-
-typedef struct {
-	uint8_t bCharSet;
-	uint8_t xRatio;
-	uint8_t yStartRatio;
-	uint8_t yEndRatio;
-} Ratios;
-
-typedef struct {
-	uint16_t recs;
-	uint8_t startsz;
-	uint8_t endsz;
-} VDMX_group;
-
-typedef struct {
-	uint16_t yPelHeight;
-	uint16_t yMax;
-	uint16_t yMin;
-} VDMX_vTable;
-
-static int load_VDMX(Font_Container *font, int height)
+/* Snap ppem to the nearest size where a pixel font renders without
+ * anti-aliased edges (ties prefer the smaller candidate).
+ * Returns basePpem unchanged if no crisp candidate is found nearby. */
+static int snap_ppem_to_pixel_grid(_TTF_Font *font, int basePpem, int reqHeight)
 {
-	VDMX_Header hdr;
-	VDMX_group group;
-	uint8_t devXRatio, devYRatio;
-	unsigned short numRatios;
-	unsigned int result, offset = -1;
-	int i, ppem = 0;
+	const float CRISP = 0.02f; /* <2% mid-gray counts as pixel-perfect */
+	(void)reqHeight; /* ponytail: si el snap hacia arriba llega a solapar
+	 * lineas en alguna UI, usar reqHeight para rechazar candidatos que
+	 * superen TTF_FontHeight > reqHeight (modo shrink-only) */
 
-	result = freetype_get_font_data(font, MS_VDMX_TAG, 0, &hdr, sizeof(hdr));
+	if (TTF_SetFontSize(font, basePpem))
+		return basePpem;
+	if (probe_mid_gray_ratio(font) < CRISP)
+		return basePpem; /* already crisp */
 
-	if(result == GDI_ERROR) /* no vdmx table present, use linear scaling */
-		return ppem;
-
-	/* FIXME: need the real device aspect ratio */
-	devXRatio = 1;
-	devYRatio = 1;
-
-	numRatios = GET_BE_WORD(hdr.numRatios);
-
-	for(i = 0; i < numRatios; i++) {
-		Ratios ratio;
-
-		offset = sizeof(hdr) + (i * sizeof(Ratios));
-		freetype_get_font_data(font, MS_VDMX_TAG, offset, &ratio, sizeof(Ratios));
-		offset = -1;
-
-		if (!ratio.bCharSet)
+	int best = basePpem;
+	int bestDist = 9;
+	for (int delta = -8; delta <= 8; ++delta)
+	{
+		int cand = basePpem + delta;
+		if (delta == 0 || cand < 4)
 			continue;
-
-		if((ratio.xRatio == 0 &&
-			ratio.yStartRatio == 0 &&
-			ratio.yEndRatio == 0) ||
-		   (devXRatio == ratio.xRatio &&
-			devYRatio >= ratio.yStartRatio &&
-			devYRatio <= ratio.yEndRatio))
+		if (TTF_SetFontSize(font, cand))
+			continue;
+		if (probe_mid_gray_ratio(font) >= CRISP)
+			continue;
+		int dist = delta < 0 ? -delta : delta;
+		if (dist < bestDist)
 		{
-			uint16_t group_offset;
-
-			offset = sizeof(hdr) + numRatios * sizeof(ratio) + i * sizeof(group_offset);
-			freetype_get_font_data(font, MS_VDMX_TAG, offset, &group_offset, sizeof(group_offset));
-			offset = GET_BE_WORD(group_offset);
-			break;
+			best = cand;
+			bestDist = dist;
 		}
 	}
-
-	if(offset == -1) return 0;
-
-	if(freetype_get_font_data(font, MS_VDMX_TAG, offset, &group, sizeof(group)) != GDI_ERROR) {
-		uint16_t recs;
-		std::vector<VDMX_vTable> vTable;
-
-		recs = GET_BE_WORD(group.recs);
-
-		vTable.resize(recs);
-		result = freetype_get_font_data(font, MS_VDMX_TAG, offset + sizeof(group), &vTable[0], recs * sizeof(VDMX_vTable));
-		if(result == GDI_ERROR) /* Failed to retrieve vTable */
-			return 0;
-
-		for(i = 0; i < recs; i++) {
-			VDMX_vTable &entry = vTable[i];
-			short yMax = GET_BE_WORD(entry.yMax);
-			short yMin = GET_BE_WORD(entry.yMin);
-			ppem = GET_BE_WORD(entry.yPelHeight);
-
-			if(yMax + -yMin == height) {
-				font->yMax = yMax;
-				font->yMin = yMin;
-				break;
-			}
-			if(yMax + -yMin > height) {
-				if(--i < 0) {
-					ppem = 0;
-					return 0; /* failed */
-				}
-				VDMX_vTable &entry = vTable[i];
-				font->yMax = GET_BE_WORD(entry.yMax);
-				font->yMin = GET_BE_WORD(entry.yMin);
-				ppem = GET_BE_WORD(entry.yPelHeight);
-				break;
-			}
-		}
-		if(!font->yMax) /* ppem not found for height */
-			ppem = 0;
-	}
-
-	return ppem;
+	TTF_SetFontSize(font, best);
+	return best;
 }
-
-/* Some fonts have large usWinDescent values, as a result of storing signed short
-   in unsigned field. That's probably caused by sTypoDescent vs usWinDescent confusion in
-   some font generation tools. */
-static inline USHORT get_fixed_windescent(USHORT windescent)
-{
-    return abs((SHORT)windescent);
-}
-
-static int calc_ppem_for_height(Font_Container *font, int height)
-{
-	FT_Face ft_face = *(reinterpret_cast<FT_Face *>( font->font ));
-	TT_OS2 *pOS2;
-	TT_HoriHeader *pHori;
-
-	int ppem;
-	const int MAX_PPEM = (1 << 16) - 1;
-
-	pOS2 = (TT_OS2 *)FT_Get_Sfnt_Table(ft_face, FT_SFNT_OS2);
-	pHori = (TT_HoriHeader *)FT_Get_Sfnt_Table(ft_face, FT_SFNT_HHEA);
-
-	if(height == 0)
-		height = 16;
-
-	/* Calc. height of EM square:
-	 *
-	 * For +ve lfHeight we have
-	 * lfHeight = (winAscent + winDescent) * ppem / units_per_em
-	 * Re-arranging gives:
-	 * ppem = units_per_em * lfheight / (winAscent + winDescent)
-	 *
-	 * For -ve lfHeight we have
-	 * |lfHeight| = ppem
-	 * [i.e. |lfHeight| = (winAscent + winDescent - il) * ppem / units_per_em
-	 * with il = winAscent + winDescent - units_per_em]
-	 *
-	 */
-
-	if(height > 0) {
-		USHORT windescent = get_fixed_windescent(pOS2->usWinDescent);
-		int units;
-
-		if(pOS2->usWinAscent + windescent == 0)
-		{
-			font->yMax = pHori->Ascender;
-			font->yMin = pHori->Descender;
-			units = pHori->Ascender - pHori->Descender;
-		} else {
-			font->yMax = pOS2->usWinAscent;
-			font->yMin = -windescent;
-			units = pOS2->usWinAscent + windescent;
-		}
-		ppem = (int)FT_MulDiv(ft_face->units_per_EM, height, units);
-
-		/* If rounding ends up getting a font exceeding height, choose a smaller ppem */
-		if(ppem > 1 && FT_MulDiv(units, ppem, ft_face->units_per_EM) > height)
-			--ppem;
-
-		if(ppem > MAX_PPEM) {
-			//WARN("Ignoring too large height %d, ppem %d\n", height, ppem);
-			ppem = 1;
-		}
-	}
-	else if(height >= -MAX_PPEM)
-		ppem = -height;
-	else {
-		//WARN("Ignoring too large height %d\n", height);
-		ppem = 1;
-	}
-
-	return ppem;
-}
-/* /wine */
 
 _TTF_Font *SharedFontState::getFont(std::string family,
                                     int size, float hiresMult, int outline_size)
@@ -608,19 +423,23 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 
 	if (font)
 	{
+		/* RGSS doesn't use font hinting; set before pixel grid probing
+		 * so the probe measures the same conditions as the final render */
+		TTF_SetFontHinting(font, p->fontHinting);
+
 		FT_Face face = TTF_FONT_TO_FT_FACE(font);
 		/* This is should always be true, but we may as well check... */
 		if (FT_IS_SCALABLE( face ))
 		{
 			if (ppem == 0)
 			{
-				Font_Container c = { 0 };
-				c.font = font;
-				c.ppem = load_VDMX(&c, size);
-				if (!c.ppem)
-					c.ppem = calc_ppem_for_height( &c, size );
-
-				ppem = std::max<int>(c.ppem * p->fontScale, 1);
+				/* ponytail: la emulacion wine de ppem (VDMX/GDI) que
+				 * trajo el merge rompia las fuentes pixel; se usa size
+				 * en px directo, igual que pre-merge. */
+				ppem = std::max<int>(size * p->fontScale, 1);
+				if (p->fontPixelSnap)
+					ppem = snap_ppem_to_pixel_grid(font, ppem,
+					                               std::max<int>(size * p->fontScale, 1));
 				ppemMult = std::max<int>(ppem * hiresMult, 1);
 			}
 			if (TTF_SetFontSize(font, ppemMult))
@@ -635,6 +454,9 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 			if (ppem == 0)
 			{
 				ppem = std::max<int>(size * p->fontScale, 5);
+				if (p->fontPixelSnap)
+					ppem = snap_ppem_to_pixel_grid(font, ppem,
+					                               std::max<int>(size * p->fontScale, 1));
 				ppemMult = std::max<int>(ppem * hiresMult, 1);
 			}
 			if (TTF_SetFontSize(font, ppemMult))
@@ -642,11 +464,6 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 				TTF_CloseFont(font);
 				font = 0;
 			}
-		}
-		if (font)
-		{
-			/* RGSS doesn't use font hinting */
-			TTF_SetFontHinting(font, p->fontHinting);
 		}
 	}
 	
