@@ -102,8 +102,10 @@ public:
     bool mouseInWindow();
     
     bool getControllerConnected();
+    bool getControllerRumbleAvailable();
     const char *getControllerName();
     int getControllerPowerLevel();
+    bool controllerRumble(double lowFrequency, double highFrequency, Uint32 durationMs);
     
     bool getTextInputMode();
     void setTextInputMode(bool mode);

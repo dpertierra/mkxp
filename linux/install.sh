@@ -2,11 +2,19 @@
 BINARY=$1
 ARCH=$2
 STEAM=$3
+if ! command -v patchelf >/dev/null 2>&1; then
+  echo "Error: patchelf is required to install the Linux runtime." >&2
+  exit 1
+fi
 function get_dep()
 {
-echo "Copying $1..."
-DEP=$(ldd $BINARY | grep $1 | sed -r 's/	\w.+ => (\/.+) .+$/\1/g')
-cp "$DEP" "${MESON_INSTALL_PREFIX}/lib$ARCH"
+  echo "Copying $1..."
+  DEP=$(ldd "$BINARY" | grep "$1" | sed -r 's/	\w.+ => (\/.+) .+$/\1/g')
+  if [ -z "$DEP" ]; then
+    echo "Skipping $1 (not linked)"
+    return 0
+  fi
+  cp "$DEP" "${MESON_INSTALL_PREFIX}/lib$ARCH"
 }
 
 mkdir -p ${MESON_INSTALL_PREFIX}/lib$ARCH

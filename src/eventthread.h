@@ -29,6 +29,7 @@
 #include <SDL_gamecontroller.h>
 
 #include <string>
+#include <atomic>
 
 #include <stdint.h>
 
@@ -98,6 +99,7 @@ public:
 	void requestShowCursor(bool mode);
     
     void requestTextInputMode(bool mode);
+    bool requestControllerRumble(Uint16 lowFrequency, Uint16 highFrequency, Uint32 durationMs);
     
     void requestSettingsMenu();
 
@@ -106,6 +108,7 @@ public:
 	bool getFullscreen() const;
 	bool getShowCursor() const;
     bool getControllerConnected() const;
+    bool getControllerRumbleAvailable() const;
     
     SDL_GameController *controller() const;
 
@@ -130,6 +133,7 @@ private:
 	bool showCursor;
     
     SDL_GameController *ctrl;
+    std::atomic<bool> controllerHasRumble;
     
 	AtomicFlag msgBoxDone;
     

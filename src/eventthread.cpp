@@ -22,6 +22,7 @@
 #include "eventthread.h"
 
 #include <SDL_events.h>
+#include <SDL_version.h>
 #include <SDL_messagebox.h>
 #include <SDL_timer.h>
 #include <SDL_thread.h>
@@ -53,6 +54,16 @@
 #endif
 
 #include <string.h>
+
+static bool controllerSupportsRumble(SDL_GameController *controller)
+{
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    return controller && SDL_GameControllerHasRumble(controller) == SDL_TRUE;
+#else
+    (void) controller;
+    return false;
+#endif
+}
 
 typedef void (ALC_APIENTRY *LPALCDEVICEPAUSESOFT) (ALCdevice *device);
 typedef void (ALC_APIENTRY *LPALCDEVICERESUMESOFT) (ALCdevice *device);
@@ -101,6 +112,7 @@ enum
     REQUEST_SETCURSORVISIBLE,
     
     REQUEST_TEXTMODE,
+    REQUEST_CONTROLLER_RUMBLE,
     
     REQUEST_SETTINGS,
     
@@ -108,6 +120,13 @@ enum
     UPDATE_SCREEN_RECT,
     
     EVENT_COUNT
+};
+
+struct ControllerRumbleRequest
+{
+    Uint16 lowFrequency;
+    Uint16 highFrequency;
+    Uint32 durationMs;
 };
 
 static uint32_t usrIdStart;
@@ -123,9 +142,10 @@ bool EventThread::allocUserEvents()
 }
 
 EventThread::EventThread()
-: ctrl(0),
-fullscreen(false),
-showCursor(false)
+: fullscreen(false),
+showCursor(false),
+ctrl(0),
+controllerHasRumble(false)
 {
     textInputLock = SDL_CreateMutex();
 }
@@ -191,6 +211,7 @@ void EventThread::process(RGSSThreadData &rtData)
     SDL_JoystickUpdate();
     if (SDL_NumJoysticks() > 0 && SDL_IsGameController(0)) {
             ctrl = SDL_GameControllerOpen(0);
+            controllerHasRumble.store(controllerSupportsRumble(ctrl));
     }
     
     char buffer[128];
@@ -466,10 +487,12 @@ void EventThread::process(RGSSThreadData &rtData)
                     break;
                 
                 ctrl = SDL_GameControllerOpen(0);
+                controllerHasRumble.store(controllerSupportsRumble(ctrl));
                 break;
                 
             case SDL_CONTROLLERDEVICEREMOVED:
                 resetInputStates();
+                controllerHasRumble.store(false);
                 ctrl = 0;
                 break;
                 
@@ -580,6 +603,22 @@ void EventThread::process(RGSSThreadData &rtData)
                         }
                         break;
                         
+                    case REQUEST_CONTROLLER_RUMBLE:
+                    {
+                        ControllerRumbleRequest *request =
+                            static_cast<ControllerRumbleRequest*>(event.user.data1);
+                        if (request)
+                        {
+                            if (ctrl && SDL_GameControllerGetAttached(ctrl) &&
+                                SDL_GameControllerRumble(ctrl, request->lowFrequency,
+                                                         request->highFrequency,
+                                                         request->durationMs) != 0)
+                                Debug() << "SDL_GameControllerRumble failed: " << SDL_GetError();
+                            delete request;
+                        }
+                        break;
+                    }
+
                     case REQUEST_MESSAGEBOX :
                     {
 #ifndef __APPLE__
@@ -658,9 +697,10 @@ void EventThread::process(RGSSThreadData &rtData)
     
     /* Just in case */
     rtData.syncPoint.resumeThreads();
-    
+
     if (SDL_GameControllerGetAttached(ctrl))
         SDL_GameControllerClose(ctrl);
+    controllerHasRumble.store(false);
     
 #ifndef MKXPZ_BUILD_XCODE
     delete sMenu;
@@ -726,8 +766,13 @@ void EventThread::cleanup()
     SDL_Event event;
     
     while (SDL_PollEvent(&event))
-        if ((event.type - usrIdStart) == REQUEST_MESSAGEBOX)
+    {
+        const Uint32 request = event.type - usrIdStart;
+        if (request == REQUEST_MESSAGEBOX)
             free(event.user.data1);
+        else if (request == REQUEST_CONTROLLER_RUMBLE)
+            delete static_cast<ControllerRumbleRequest*>(event.user.data1);
+    }
 }
 
 void EventThread::resetInputStates()
@@ -827,6 +872,23 @@ void EventThread::requestTextInputMode(bool mode)
     SDL_PushEvent(&event);
 }
 
+bool EventThread::requestControllerRumble(Uint16 lowFrequency, Uint16 highFrequency,
+                                          Uint32 durationMs)
+{
+    ControllerRumbleRequest *request = new ControllerRumbleRequest{
+        lowFrequency, highFrequency, durationMs
+    };
+    SDL_Event event = {};
+    event.type = usrIdStart + REQUEST_CONTROLLER_RUMBLE;
+    event.user.data1 = request;
+    if (SDL_PushEvent(&event) <= 0)
+    {
+        delete request;
+        return false;
+    }
+    return true;
+}
+
 void EventThread::requestSettingsMenu()
 {
     SDL_Event event;
@@ -870,6 +932,11 @@ bool EventThread::getShowCursor() const
 bool EventThread::getControllerConnected() const
 {
     return ctrl != 0;
+}
+
+bool EventThread::getControllerRumbleAvailable() const
+{
+    return controllerHasRumble.load();
 }
 
 SDL_GameController *EventThread::controller() const

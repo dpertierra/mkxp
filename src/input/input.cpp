@@ -1479,6 +1479,11 @@ bool Input::getControllerConnected()
     return shState->eThread().getControllerConnected();
 }
 
+bool Input::getControllerRumbleAvailable()
+{
+    return shState->eThread().getControllerRumbleAvailable();
+}
+
 const char *Input::getControllerName()
 {
     return (getControllerConnected()) ?
@@ -1493,6 +1498,13 @@ int Input::getControllerPowerLevel()
     
     SDL_Joystick *js = SDL_GameControllerGetJoystick(shState->eThread().controller());
     return SDL_JoystickCurrentPowerLevel(js);
+}
+
+bool Input::controllerRumble(double lowFrequency, double highFrequency, Uint32 durationMs)
+{
+    const Uint16 low = static_cast<Uint16>(lowFrequency * 65535.0);
+    const Uint16 high = static_cast<Uint16>(highFrequency * 65535.0);
+    return shState->eThread().requestControllerRumble(low, high, durationMs);
 }
 
 bool Input::getTextInputMode()

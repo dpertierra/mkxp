@@ -19,6 +19,7 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cmath>
 #include <SDL_joystick.h>
 #include <string>
 
@@ -467,6 +468,29 @@ RB_METHOD_GUARD(inputControllerRepeatTimeEx) {
 }
 RB_METHOD_GUARD_END
 
+RB_METHOD(inputControllerRumble) {
+    RB_UNUSED_PARAM;
+
+    VALUE left, right, duration;
+    rb_scan_args(argc, argv, "3", &left, &right, &duration);
+    const double lowFrequency = NUM2DBL(left);
+    const double highFrequency = NUM2DBL(right);
+    if (!std::isfinite(lowFrequency) || !std::isfinite(highFrequency) ||
+        lowFrequency < 0.0 || lowFrequency > 1.0 ||
+        highFrequency < 0.0 || highFrequency > 1.0)
+        rb_raise(rb_eArgError, "rumble strengths must be between 0.0 and 1.0");
+    const Uint32 durationMs = NUM2UINT(duration);
+
+    return rb_bool_new(shState->input().controllerRumble(lowFrequency,
+                                                         highFrequency,
+                                                         durationMs));
+}
+
+RB_METHOD(inputControllerRumbleAvailable) {
+    RB_UNUSED_PARAM;
+    return rb_bool_new(shState->input().getControllerRumbleAvailable());
+}
+
 RB_METHOD(inputControllerRawButtonStates) {
     RB_UNUSED_PARAM;
     
@@ -602,6 +626,8 @@ void inputBindingInit() {
     _rb_define_module_function(submod, "connected?", inputControllerConnected);
     _rb_define_module_function(submod, "name", inputControllerName);
     _rb_define_module_function(submod, "power_level", inputControllerPowerLevel);
+    _rb_define_module_function(submod, "rumble", inputControllerRumble);
+    _rb_define_module_function(submod, "rumble_available?", inputControllerRumbleAvailable);
     _rb_define_module_function(submod, "axes_left", inputControllerGetLeftAxis);
     _rb_define_module_function(submod, "axes_right", inputControllerGetRightAxis);
     _rb_define_module_function(submod, "axes_trigger", inputControllerGetTriggerAxis);
