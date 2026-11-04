@@ -66,6 +66,7 @@
 		3B10EDB82568E95E00372D13 /* soundemitter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED652568E95D00372D13 /* soundemitter.cpp */; };
 		3B10EDB92568E95E00372D13 /* audiostream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED662568E95D00372D13 /* audiostream.cpp */; };
 		3B10EDBA2568E95E00372D13 /* vorbissource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED6A2568E95D00372D13 /* vorbissource.cpp */; };
+		DF65755C7BD388143573E6EC /* opussource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D5EB7CE9A9DFB393EFC0F78 /* opussource.cpp */; };
 		3B10EDBC2568E95E00372D13 /* windowvx.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED722568E95D00372D13 /* windowvx.cpp */; };
 		3B10EDBD2568E95E00372D13 /* bitmap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED732568E95D00372D13 /* bitmap.cpp */; };
 		3B10EDBE2568E95E00372D13 /* window.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED742568E95D00372D13 /* window.cpp */; };
@@ -136,6 +137,7 @@
 		3B1C237D25A19C600075EF5D /* config.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B5A84052569B56F00BAF2E5 /* config.cpp */; };
 		3B1C237E25A19C600075EF5D /* bitmap-binding.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10EDE42568E96A00372D13 /* bitmap-binding.cpp */; };
 		3B1C237F25A19C600075EF5D /* vorbissource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED6A2568E95D00372D13 /* vorbissource.cpp */; };
+		799F883C59A4AF1C589D37B8 /* opussource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D5EB7CE9A9DFB393EFC0F78 /* opussource.cpp */; };
 		3B1C238125A19C600075EF5D /* filesystem-binding.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10EDD72568E96A00372D13 /* filesystem-binding.cpp */; };
 		3B1C238325A19C600075EF5D /* glstate.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED8A2568E95E00372D13 /* glstate.cpp */; };
 		3B1C238425A19C600075EF5D /* gl-fun.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED922568E95E00372D13 /* gl-fun.cpp */; };
@@ -297,6 +299,7 @@
 		3BBE87912705A73400A574AE /* config.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B5A84052569B56F00BAF2E5 /* config.cpp */; };
 		3BBE87922705A73400A574AE /* bitmap-binding.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10EDE42568E96A00372D13 /* bitmap-binding.cpp */; };
 		3BBE87932705A73400A574AE /* vorbissource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED6A2568E95D00372D13 /* vorbissource.cpp */; };
+		224ED48BFD5CA81A10850121 /* opussource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D5EB7CE9A9DFB393EFC0F78 /* opussource.cpp */; };
 		3BBE87942705A73400A574AE /* filesystem-binding.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10EDD72568E96A00372D13 /* filesystem-binding.cpp */; };
 		3BBE87952705A73400A574AE /* glstate.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED8A2568E95E00372D13 /* glstate.cpp */; };
 		3BBE87962705A73400A574AE /* gl-fun.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED922568E95E00372D13 /* gl-fun.cpp */; };
@@ -414,6 +417,7 @@
 		3BC65D982584F3AD0063AFF1 /* config.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B5A84052569B56F00BAF2E5 /* config.cpp */; };
 		3BC65D992584F3AD0063AFF1 /* bitmap-binding.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10EDE42568E96A00372D13 /* bitmap-binding.cpp */; };
 		3BC65D9A2584F3AD0063AFF1 /* vorbissource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED6A2568E95D00372D13 /* vorbissource.cpp */; };
+		672DA5FFBAC367065C354E73 /* opussource.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D5EB7CE9A9DFB393EFC0F78 /* opussource.cpp */; };
 		3BC65D9C2584F3AD0063AFF1 /* filesystem-binding.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10EDD72568E96A00372D13 /* filesystem-binding.cpp */; };
 		3BC65D9E2584F3AD0063AFF1 /* glstate.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED8A2568E95E00372D13 /* glstate.cpp */; };
 		3BC65D9F2584F3AD0063AFF1 /* gl-fun.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3B10ED922568E95E00372D13 /* gl-fun.cpp */; };
@@ -946,6 +950,7 @@
 		3B10ED682568E95D00372D13 /* audiostream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = audiostream.h; sourceTree = "<group>"; };
 		3B10ED692568E95D00372D13 /* al-util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "al-util.h"; sourceTree = "<group>"; };
 		3B10ED6A2568E95D00372D13 /* vorbissource.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = vorbissource.cpp; sourceTree = "<group>"; };
+		0D5EB7CE9A9DFB393EFC0F78 /* opussource.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = opussource.cpp; sourceTree = "<group>"; };
 		3B10ED6B2568E95D00372D13 /* aldatasource.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = aldatasource.h; sourceTree = "<group>"; };
 		3B10ED6C2568E95D00372D13 /* sharedmidistate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sharedmidistate.h; sourceTree = "<group>"; };
 		3B10ED6D2568E95D00372D13 /* alstream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = alstream.h; sourceTree = "<group>"; };
@@ -1560,6 +1565,7 @@
 				3B10ED632568E95D00372D13 /* sdlsoundsource.cpp */,
 				3B10ED652568E95D00372D13 /* soundemitter.cpp */,
 				3B10ED6A2568E95D00372D13 /* vorbissource.cpp */,
+				0D5EB7CE9A9DFB393EFC0F78 /* opussource.cpp */,
 				3B10ED692568E95D00372D13 /* al-util.h */,
 				3B10ED6B2568E95D00372D13 /* aldatasource.h */,
 				3B10ED6D2568E95D00372D13 /* alstream.h */,
@@ -2306,6 +2312,7 @@
 				3B1C237D25A19C600075EF5D /* config.cpp in Sources */,
 				3B1C237E25A19C600075EF5D /* bitmap-binding.cpp in Sources */,
 				3B1C237F25A19C600075EF5D /* vorbissource.cpp in Sources */,
+				799F883C59A4AF1C589D37B8 /* opussource.cpp in Sources */,
 				3B1C238125A19C600075EF5D /* filesystem-binding.cpp in Sources */,
 				3B1C238325A19C600075EF5D /* glstate.cpp in Sources */,
 				3B1C238425A19C600075EF5D /* gl-fun.cpp in Sources */,
@@ -2394,6 +2401,7 @@
 				3BBE87912705A73400A574AE /* config.cpp in Sources */,
 				3BBE87922705A73400A574AE /* bitmap-binding.cpp in Sources */,
 				3BBE87932705A73400A574AE /* vorbissource.cpp in Sources */,
+				224ED48BFD5CA81A10850121 /* opussource.cpp in Sources */,
 				3BBE87942705A73400A574AE /* filesystem-binding.cpp in Sources */,
 				3BBE87952705A73400A574AE /* glstate.cpp in Sources */,
 				3BBE87962705A73400A574AE /* gl-fun.cpp in Sources */,
@@ -2476,6 +2484,7 @@
 				3BC65D982584F3AD0063AFF1 /* config.cpp in Sources */,
 				3BC65D992584F3AD0063AFF1 /* bitmap-binding.cpp in Sources */,
 				3BC65D9A2584F3AD0063AFF1 /* vorbissource.cpp in Sources */,
+				672DA5FFBAC367065C354E73 /* opussource.cpp in Sources */,
 				3BC65D9C2584F3AD0063AFF1 /* filesystem-binding.cpp in Sources */,
 				3BA69454263DAB53004194EB /* libnsgif.c in Sources */,
 				3BC65D9E2584F3AD0063AFF1 /* glstate.cpp in Sources */,
@@ -2556,6 +2565,7 @@
 				3B5A84062569B56F00BAF2E5 /* config.cpp in Sources */,
 				3B10EDFF2568E96A00372D13 /* bitmap-binding.cpp in Sources */,
 				3B10EDBA2568E95E00372D13 /* vorbissource.cpp in Sources */,
+				DF65755C7BD388143573E6EC /* opussource.cpp in Sources */,
 				3B10EDF62568E96A00372D13 /* filesystem-binding.cpp in Sources */,
 				3BA69455263DAB53004194EB /* libnsgif.c in Sources */,
 				3B10EDC92568E95E00372D13 /* glstate.cpp in Sources */,
