@@ -116,33 +116,20 @@ struct VorbisSource : ALDataSource
 		if (!loop.requested)
 			return;
 
-		/* Try to extract loop info */
-		for (int i = 0; i < vf.vc->comments; ++i)
-		{
-			char *comment = vf.vc->user_comments[i];
-			char *sep = strstr(comment, "=");
+		/* Try to extract loop info. Vorbis comment names are
+		 * case-insensitive, and LOOPSTART may legitimately be 0. */
+		vorbis_comment *vc = ov_comment(&vf, -1);
+		const char *start = vc ? vorbis_comment_query(vc, "LOOPSTART", 0) : 0;
+		const char *length = vc ? vorbis_comment_query(vc, "LOOPLENGTH", 0) : 0;
 
-			/* No '=' found */
-			if (!sep)
-				continue;
+		if (start)
+			loop.start = strtol(start, 0, 10);
 
-			/* Empty value */
-			if (!*(sep+1))
-				continue;
-
-			*sep = '\0';
-
-			if (!strcmp(comment, "LOOPSTART"))
-				loop.start = strtol(sep+1, 0, 10);
-
-			if (!strcmp(comment, "LOOPLENGTH"))
-				loop.length = strtol(sep+1, 0, 10);
-
-			*sep = '=';
-		}
+		if (length)
+			loop.length = strtol(length, 0, 10);
 
 		loop.end = loop.start + loop.length;
-		loop.valid = (loop.start && loop.length);
+		loop.valid = (loop.length > 0);
 	}
 
 	~VorbisSource()
