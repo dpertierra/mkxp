@@ -4,6 +4,7 @@ theora = dependency('theora', static: build_static)
 vorbisfile = dependency('vorbisfile', static: build_static)
 vorbis = dependency('vorbis', static: build_static)
 ogg = dependency('ogg', static: build_static)
+opusfile = dependency('opusfile', static: build_static)
 sdl2 = dependency('SDL2', version: '>=2.0.9', static: build_static)
 sdl_sound = compilers['cpp'].find_library('SDL2_sound')
 sdl2_ttf = dependency('SDL2_ttf', static: build_static)
@@ -96,7 +97,7 @@ global_include_dirs += include_directories('.',
     'util', 'util/sigslot', 'util/sigslot/adapter'
 )
 
-global_dependencies += [openal, zlib, bz2, sdl2, sdl_sound, pixman, physfs, theora, vorbisfile, vorbis, ogg, sdl2_ttf, freetype, sdl2_image, png, iconv, uchardet]
+global_dependencies += [openal, zlib, bz2, sdl2, sdl_sound, pixman, physfs, theora, vorbisfile, vorbis, ogg, opusfile, sdl2_ttf, freetype, sdl2_image, png, iconv, uchardet]
 if host_system == 'windows'
     global_dependencies += compilers['cpp'].find_library('wsock32')
 endif
@@ -128,6 +129,7 @@ main_source = files(
     'audio/midisource.cpp',
     'audio/sdlsoundsource.cpp',
     'audio/soundemitter.cpp',
+    'audio/opussource.cpp',
     'audio/vorbissource.cpp',
     'theoraplay/theoraplay.c',
 

@@ -94,6 +94,38 @@ $(DOWNLOADS)/vorbis/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/xiph/vorbis -b v1.3.7 $(DOWNLOADS)/vorbis
 
 
+# Opus
+libopus: init_dirs $(LIBDIR)/libopus.a
+
+$(LIBDIR)/libopus.a: $(DOWNLOADS)/opus/cmakebuild/Makefile
+	cd $(DOWNLOADS)/opus/cmakebuild; \
+	make -j$(NPROC); make install
+
+$(DOWNLOADS)/opus/cmakebuild/Makefile: $(DOWNLOADS)/opus/CMakeLists.txt
+	cd $(DOWNLOADS)/opus; \
+	mkdir -p cmakebuild; cd cmakebuild; \
+	$(CMAKE) -DBUILD_SHARED_LIBS=no -DOPUS_BUILD_PROGRAMS=no -DOPUS_BUILD_TESTING=no -DCMAKE_INSTALL_LIBDIR=lib
+
+$(DOWNLOADS)/opus/CMakeLists.txt:
+	$(CLONE) $(GITHUB)/xiph/opus -b v1.5.2 $(DOWNLOADS)/opus
+
+# Opusfile, Opus decoding on top of Ogg
+libopusfile: init_dirs libogg libopus $(LIBDIR)/libopusfile.a
+
+$(LIBDIR)/libopusfile.a: $(LIBDIR)/libogg.a $(LIBDIR)/libopus.a $(DOWNLOADS)/opusfile/Makefile
+	cd $(DOWNLOADS)/opusfile; \
+	make -j$(NPROC); make install
+
+$(DOWNLOADS)/opusfile/Makefile: $(DOWNLOADS)/opusfile/configure
+	cd $(DOWNLOADS)/opusfile; \
+	$(CONFIGURE) --enable-static=true --enable-shared=false --disable-http --disable-doc --disable-examples
+
+$(DOWNLOADS)/opusfile/configure: $(DOWNLOADS)/opusfile/autogen.sh
+	cd $(DOWNLOADS)/opusfile; ./autogen.sh
+
+$(DOWNLOADS)/opusfile/autogen.sh:
+	$(CLONE) $(GITHUB)/xiph/opusfile -b v0.12 $(DOWNLOADS)/opusfile
+
 # Ogg, dependency of Vorbis
 libogg: init_dirs $(LIBDIR)/libogg.a
 
@@ -338,5 +370,5 @@ clean-downloads:
 clean-compiled:
 	-rm -rf build-macosx-$(ARCH)
 
-deps-core: libtheora libvorbis pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf openal openssl
+deps-core: libtheora libvorbis libopusfile pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf openal openssl
 everything: deps-core ruby

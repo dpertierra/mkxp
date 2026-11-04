@@ -201,16 +201,24 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 
 	bool tryRead(SDL_RWops &ops, const char *ext)
 	{
-		/* Try to read ogg file signature */
+		/* Try to read ogg file signature. The first Ogg page of an
+		 * Opus stream carries "OpusHead" right after the 28-byte
+		 * page header (27 + 1 segment). */
 		char sig[5] = { 0 };
+		char head[8] = { 0 };
 		SDL_RWread(&ops, sig, 1, 4);
+		SDL_RWseek(&ops, 28, RW_SEEK_SET);
+		SDL_RWread(&ops, head, 1, 8);
 		SDL_RWseek(&ops, 0, RW_SEEK_SET);
 
 		try
 		{
 			if (!strcmp(sig, "OggS"))
 			{
-				source = createVorbisSource(ops, looped);
+				if (!memcmp(head, "OpusHead", 8))
+					source = createOpusSource(ops, looped);
+				else
+					source = createVorbisSource(ops, looped);
 				return true;
 			}
 

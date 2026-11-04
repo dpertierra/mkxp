@@ -20,6 +20,7 @@
 */
 
 #include "soundemitter.h"
+#include "aldatasource.h"
 
 #include "sharedstate.h"
 #include "filesystem.h"
@@ -194,6 +195,31 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 
 	bool tryRead(SDL_RWops &ops, const char *ext)
 	{
+		/* Opus streams (Ogg container, "OpusHead" after the 28-byte
+		 * first page header) aren't handled by SDL_sound */
+		char head[8] = { 0 };
+		SDL_RWseek(&ops, 28, RW_SEEK_SET);
+		SDL_RWread(&ops, head, 1, 8);
+		SDL_RWseek(&ops, 0, RW_SEEK_SET);
+
+		if (!memcmp(head, "OpusHead", 8))
+		{
+			std::vector<int16_t> pcm;
+			int channels, rate;
+
+			if (!decodeOpusAll(ops, pcm, channels, rate))
+				return false;
+
+			buffer = new SoundBuffer;
+			buffer->bytes = pcm.size() * sizeof(int16_t);
+
+			AL::Buffer::uploadData(buffer->alBuffer,
+			                       chooseALFormat(sizeof(int16_t), channels),
+			                       pcm.data(), buffer->bytes, rate);
+
+			return true;
+		}
+
 		Sound_Sample *sample = Sound_NewSample(&ops, ext, 0, STREAM_BUF_SIZE);
 
 		if (!sample)

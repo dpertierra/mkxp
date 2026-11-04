@@ -24,6 +24,8 @@
 
 #include "al-util.h"
 
+#include <vector>
+
 struct ALDataSource
 {
 	enum Status
@@ -60,6 +62,14 @@ ALDataSource *createSDLSource(SDL_RWops &ops,
 
 ALDataSource *createVorbisSource(SDL_RWops &ops,
                                  bool looped);
+
+ALDataSource *createOpusSource(SDL_RWops &ops,
+                               bool looped);
+
+/* Decodes a whole Opus file to 16-bit PCM (for short sound effects).
+ * Closes ops. Returns false on failure. */
+bool decodeOpusAll(SDL_RWops &ops, std::vector<int16_t> &pcm,
+                   int &channels, int &rate);
 
 ALDataSource *createMidiSource(SDL_RWops &ops,
                                bool looped);
