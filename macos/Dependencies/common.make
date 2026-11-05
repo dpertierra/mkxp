@@ -52,6 +52,7 @@ RUBY_CONFIGURE_ARGS := \
 	--with-static-linked-ext \
 	--disable-rubygems \
 	--without-gmp \
+	rb_cv_symbol_prefix=_ \
 	--disable-install-doc \
 	--build=$(RBUILD) \
 	${EXTRA_RUBY_CONFIG_ARGS}
