@@ -120,6 +120,10 @@ jobs:
           sudo apt update
           sudo apt install git wget build-essential cmake meson autoconf automake libtool pkg-config ruby rustc bison xxd patchelf zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev -y
 
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+
       - name: Build everything else
         run: |
           cd linux
@@ -176,6 +180,10 @@ jobs:
         run: |
           cd macos/Dependencies
           brew bundle
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
 
       - name: Build all dependencies
         run: |

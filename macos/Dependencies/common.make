@@ -356,7 +356,6 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 $(DOWNLOADS)/ruby/configure.ac:
 	$(CLONE) $(RUBY_REPO) $(DOWNLOADS)/ruby --single-branch -b $(RUBY_BRANCH) --depth 1;
 	sed -i '' '/: $${PRELOADENV=DYLD_INSERT_LIBRARIES}/g' $(DOWNLOADS)/ruby/configure.ac
-	cd $(DOWNLOADS)/ruby && patch -p1 < $(CURDIR)/ruby-socket-darwin-sdk.patch
 
 # ====
 init_dirs:

@@ -24,6 +24,10 @@ jobs:
           cd macos/Dependencies
           brew bundle
 
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+
       - name: Build dependencies
         run: |
           cd macos/Dependencies
