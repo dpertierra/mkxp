@@ -22,6 +22,8 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
+RUBY_REPO   ?= $(GITHUB)/dpertierra/ruby
+RUBY_BRANCH ?= mkxp-z-4.0.x
 
 CONFIGURE_ENV := \
 	CMAKE_POLICY_VERSION_MINIMUM=3.10 \
@@ -48,6 +50,7 @@ RUBY_CONFIGURE_ARGS := \
 	--with-out-ext=openssl,readline,dbm,gdbm \
 	--with-static-linked-ext \
 	--disable-rubygems \
+	--enable-yjit \
 	--without-gmp
 
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
@@ -365,9 +368,9 @@ $(DOWNLOADS)/openssl/Configure:
 	$(CLONE) $(GITHUB)/openssl/openssl $(DOWNLOADS)/openssl --single-branch --branch openssl-3.0.12 --depth 1
 
 # Standard ruby
-ruby: init_dirs openssl $(LIBDIR)/libruby.so.3.1
+ruby: init_dirs openssl $(LIBDIR)/libruby.so.4.0
 
-$(LIBDIR)/libruby.so.3.1: $(DOWNLOADS)/ruby/Makefile
+$(LIBDIR)/libruby.so.4.0: $(DOWNLOADS)/ruby/Makefile
 	cd $(DOWNLOADS)/ruby; \
 	make -j$(NPROC); make install DESTDIR="$(BUILD_PREFIX)"
 
@@ -384,7 +387,7 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 	cd $(DOWNLOADS)/ruby; autoreconf -i
 
 $(DOWNLOADS)/ruby/configure.ac:
-	$(CLONE) $(GITHUB)/mkxp-z/ruby $(DOWNLOADS)/ruby --single-branch --branch mkxp-z-3.1.3 --depth 1;
+	$(CLONE) $(RUBY_REPO) $(DOWNLOADS)/ruby --single-branch --branch $(RUBY_BRANCH) --depth 1;
 
 # ====
 init_dirs:

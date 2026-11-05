@@ -13,6 +13,8 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
+RUBY_REPO   ?= $(GITHUB)/dpertierra/ruby
+RUBY_BRANCH ?= mkxp-z-4.0.x
 
 # need to set the build variable because Ruby is picky
 ifeq "$(strip $(shell uname -m))" "arm64"
@@ -50,6 +52,7 @@ RUBY_CONFIGURE_ARGS := \
 	--with-out-ext=fiddle,gdbm,win32ole,win32 \
 	--with-static-linked-ext \
 	--disable-rubygems \
+	--enable-yjit \
 	--disable-install-doc \
 	--build=$(RBUILD) \
 	${EXTRA_RUBY_CONFIG_ARGS}
@@ -332,12 +335,12 @@ $(DOWNLOADS)/openssl/Configure:
 	$(CLONE) $(GITHUB)/openssl/openssl $(DOWNLOADS)/openssl --single-branch --branch openssl-3.0.12 --depth 1
 
 # Standard ruby
-ruby: init_dirs openssl $(LIBDIR)/libruby.3.1.dylib
+ruby: init_dirs openssl $(LIBDIR)/libruby.4.0.dylib
 
-$(LIBDIR)/libruby.3.1.dylib: $(DOWNLOADS)/ruby/Makefile
+$(LIBDIR)/libruby.4.0.dylib: $(DOWNLOADS)/ruby/Makefile
 	cd $(DOWNLOADS)/ruby; \
 	$(CONFIGURE_ENV) make -j$(NPROC); $(CONFIGURE_ENV) make install
-	install_name_tool -id @rpath/libruby.3.1.dylib $(LIBDIR)/libruby.3.1.dylib
+	install_name_tool -id @rpath/libruby.4.0.dylib $(LIBDIR)/libruby.4.0.dylib
 
 # -std=gnu99 is needed with GCC 15 and higher (which default to gnu23), for Ruby versions that aren't valid C23.
 # Ruby versions that are valid C23 are 3.2.9+, 3.3.9+, 3.4.5+, and 3.5.0+.
@@ -352,7 +355,7 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 	cd $(DOWNLOADS)/ruby; autoreconf -i
 
 $(DOWNLOADS)/ruby/configure.ac:
-	$(CLONE) $(GITHUB)/mkxp-z/ruby $(DOWNLOADS)/ruby --single-branch -b mkxp-z-3.1.3 --depth 1;
+	$(CLONE) $(RUBY_REPO) $(DOWNLOADS)/ruby --single-branch -b $(RUBY_BRANCH) --depth 1;
 	sed -i '' '/: $${PRELOADENV=DYLD_INSERT_LIBRARIES}/g' $(DOWNLOADS)/ruby/configure.ac
 	cd $(DOWNLOADS)/ruby && patch -p1 < $(CURDIR)/ruby-socket-darwin-sdk.patch
 
