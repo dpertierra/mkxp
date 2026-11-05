@@ -328,6 +328,7 @@ $(DOWNLOADS)/openssl/Makefile: $(DOWNLOADS)/openssl/Configure
 	cd $(DOWNLOADS)/openssl; \
 	$(CONFIGURE_ENV) ./Configure $(OPENSSL_FLAGS) \
 	no-shared \
+	no-tests \
 	--prefix="$(BUILD_PREFIX)" \
 	--openssldir="$(BUILD_PREFIX)"
 
