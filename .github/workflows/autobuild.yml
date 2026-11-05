@@ -64,9 +64,9 @@ jobs:
           mkdir build/artifact
           cd build/artifact
           cp /mingw64/bin/zlib1.dll .
-          cp ../../windows/build-mingw64/bin/x64-msvcrt-ruby310.dll .
-          cp -r ../../windows/build-mingw64/lib/ruby/3.1.0 .
-          mv ./3.1.0 ./stdlib
+          cp ../../windows/build-mingw64/bin/x64-msvcrt-ruby400.dll .
+          cp -r ../../windows/build-mingw64/lib/ruby/4.0.0 .
+          mv ./4.0.0 ./stdlib
           cp ../mkxp-z.exe .
           cp ../../mkxp.json .
           cp -r ../../scripts .
@@ -128,7 +128,7 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt update
-          sudo apt install git wget build-essential cmake meson autoconf automake libtool pkg-config ruby bison xxd patchelf zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev -y
+          sudo apt install git wget build-essential cmake meson autoconf automake libtool pkg-config ruby rustc bison xxd patchelf zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev -y
 
       - name: Build everything else
         run: |
@@ -146,8 +146,8 @@ jobs:
       - name: Prepare archive
         run: |
           cd build/local
-          cp -r ../../linux/build-x86_64/lib/ruby/3.1.0 .
-          mv ./3.1.0 ./stdlib
+          cp -r ../../linux/build-x86_64/lib/ruby/4.0.0 .
+          mv ./4.0.0 ./stdlib
           cp ../../mkxp.json .
           cp -r ../../scripts .
           cp ../../assets/LICENSE.mkxp-z-with-https.txt .
@@ -251,8 +251,8 @@ jobs:
       - name: Prepare archive
         run: |
           cd build/local
-          cp -r ../../linux/build-${{matrix.arch_mkxpz}}/lib/ruby/3.1.0 .
-          mv ./3.1.0 ./stdlib
+          cp -r ../../linux/build-${{matrix.arch_mkxpz}}/lib/ruby/4.0.0 .
+          mv ./4.0.0 ./stdlib
           cp ../../mkxp.json .
           cp -r ../../scripts .
           cp ../../assets/LICENSE.mkxp-z-with-https.txt .
@@ -288,7 +288,7 @@ jobs:
       - name: Install apt dependencies
         run: |
           apt update
-          apt install git wget build-essential cmake meson autoconf automake libtool pkg-config ruby bison xxd patchelf zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev -y
+          apt install git wget build-essential cmake meson autoconf automake libtool pkg-config ruby rustc bison xxd patchelf zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev -y
 
       - name: Build everything else
         run: |
@@ -306,8 +306,8 @@ jobs:
       - name: Prepare archive
         run: |
           cd build/local
-          cp -r ../../linux/build-x86_64/lib/ruby/3.1.0 .
-          mv ./3.1.0 ./stdlib
+          cp -r ../../linux/build-x86_64/lib/ruby/4.0.0 .
+          mv ./4.0.0 ./stdlib
           cp ../../mkxp.json .
           cp -r ../../scripts .
           cp ../../assets/LICENSE.mkxp-z-with-https.txt .
@@ -407,8 +407,8 @@ jobs:
       - name: Prepare archive
         run: |
           cd build/local
-          cp -r ../../linux/build-${{matrix.arch_mkxpz}}/lib/ruby/3.1.0 .
-          mv ./3.1.0 ./stdlib
+          cp -r ../../linux/build-${{matrix.arch_mkxpz}}/lib/ruby/4.0.0 .
+          mv ./4.0.0 ./stdlib
           cp ../../mkxp.json .
           cp -r ../../scripts .
           cp ../../assets/LICENSE.mkxp-z-with-https.txt .
