@@ -129,7 +129,7 @@ jobs:
         # LLVM bitcode in YJIT's Rust objects ("LLVM ERROR: Invalid encoding").
         run: |
           ls -la /usr/lib/bfd-plugins || true
-          sudo rm -f /usr/lib/bfd-plugins/LLVMgold.so
+          sudo rm -f /usr/lib/bfd-plugins/LLVMgold*.so
           rustc --version
 
       - name: Build everything else
