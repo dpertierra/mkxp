@@ -134,6 +134,14 @@ jobs:
         with:
           ruby-version: '3.4'
 
+      - name: Drop stale LLVM bfd plugin
+        # ar auto-loads /usr/lib/bfd-plugins; an old LLVMgold.so can't read the newer
+        # LLVM bitcode in YJIT's Rust objects ("LLVM ERROR: Invalid encoding").
+        run: |
+          ls -la /usr/lib/bfd-plugins || true
+          sudo rm -f /usr/lib/bfd-plugins/LLVMgold.so
+          rustc --version
+
       - name: Build everything else
         run: |
           cd linux
@@ -238,6 +246,14 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+
+      - name: Drop stale LLVM bfd plugin
+        # ar auto-loads /usr/lib/bfd-plugins; an old LLVMgold.so can't read the newer
+        # LLVM bitcode in YJIT's Rust objects ("LLVM ERROR: Invalid encoding").
+        run: |
+          ls -la /usr/lib/bfd-plugins || true
+          sudo rm -f /usr/lib/bfd-plugins/LLVMgold.so
+          rustc --version
 
       - name: Build everything else
         run: |
