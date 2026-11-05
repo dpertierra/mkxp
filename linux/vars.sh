@@ -22,3 +22,9 @@ export MKXPZ_PREFIX="$DIR/build-${MKXPZ_PREFIX}"
 # Horrifying Ruby cross-compile bug workaround
 MKXPZ_RUBY_PREFIX="$MKXPZ_PREFIX/$MKXPZ_PREFIX"
 cp -a "$MKXPZ_RUBY_PREFIX"/* "$MKXPZ_PREFIX/"
+# cp -a cannot replace the existing libruby.so symlink, so it kept pointing at an old 3.1 build; repoint it to the newest copied libruby.so.<ver>.
+RUBY_SO=$(printf '%s\n' "$MKXPZ_PREFIX"/lib/libruby.so.[0-9]*.[0-9]*.[0-9]* | sort -V | tail -n 1)
+if [ -e "$RUBY_SO" ]
+then
+  ln -sfn "$(basename "$RUBY_SO")" "$MKXPZ_PREFIX/lib/libruby.so"
+fi

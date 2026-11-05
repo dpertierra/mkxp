@@ -50,7 +50,6 @@ RUBY_CONFIGURE_ARGS := \
 	--with-out-ext=openssl,readline,dbm,gdbm \
 	--with-static-linked-ext \
 	--disable-rubygems \
-	--enable-yjit \
 	--without-gmp
 
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
