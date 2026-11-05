@@ -24,7 +24,7 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
-RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-1/ruby-4.0.9-mkxpz-1.tar.gz
+RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-2/ruby-4.0.9-mkxpz-2.tar.gz
 
 CONFIGURE_ENV := \
 	CMAKE_POLICY_VERSION_MINIMUM=3.10 \

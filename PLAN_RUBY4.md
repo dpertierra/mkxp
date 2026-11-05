@@ -21,7 +21,7 @@ Detalle por tarea en `odd/tasks/ruby4-migration.md`. Los cambios del juego está
 | Fase | Estado |
 |------|--------|
 | 0 Perfilado | Pendiente: lo mide el usuario jugando. |
-| 1 Fork | Hecho: `dpertierra/ruby`, rama `mkxp-z-4.0.x` (e13681b2), release `mkxp-z-4.0.9-1`. |
+| 1 Fork | Hecho: `dpertierra/ruby`, rama `mkxp-z-4.0.x` (9cd02826), release `mkxp-z-4.0.9-2`. |
 | 2 Build | Linux hecho. CI Ubuntu verde con artefacto (run 42089759520). macOS y Windows: pendiente de confirmar en esa misma run. Windows msvcrt sin verificar. |
 | 3 Binding | Hecho: MJIT ignorado en Ruby 3.3+ (679e007b). Pendiente: comentario de `YJITEnable` en `mkxp.json` (líneas 515-521). |
 | 4 Juego | Parcial: `Dir.exist?` y `Set` (174bf6d4), `Ruby Library 4.0.0` (9267b0bd). Pendiente: saves con `Set`, avisos de deprecación y partida de humo completa. |
@@ -180,7 +180,7 @@ El build de Linux enlaza Ruby como biblioteca compartida (`libruby.so.3.1`), as�
    Sustituir la línea `$(CLONE) $(GITHUB)/mkxp-z/ruby ... mkxp-z-3.1.3` por `$(CLONE) $(RUBY_REPO) ... --branch $(RUBY_BRANCH)`
    en `linux/Makefile:387`, `windows/Makefile:355` y `macos/Dependencies/common.make:355`.
    **Actualización:** compilar Ruby desde git exige un BASERUBY >= 3.1 con openssl (rompía macOS en CI). Los tres Makefiles
-   descargan ahora un tarball de release (`RUBY_TARBALL ?=`, release `mkxp-z-4.0.9-1` de `dpertierra/ruby`) que ya trae
+   descargan ahora un tarball de release (`RUBY_TARBALL ?=`, release `mkxp-z-4.0.9-2` de `dpertierra/ruby`) que ya trae
    `configure`, los fuentes generados (prism, `parse.c`) y las gemas bundled, así que no hace falta BASERUBY.
    Regenerarlo desde el fork: `ruby tool/make-snapshot -srcdir=. -archname=ruby-4.0.9-mkxpz-N -packages=gzip <outdir> branches/mkxp-z-4.0.x`,
    subirlo con su `.sha256` como asset de una release nueva (`gh release create`) y subir el tag en `RUBY_TARBALL` en cada cambio del fork.

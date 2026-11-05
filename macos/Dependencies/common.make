@@ -13,7 +13,7 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
-RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-1/ruby-4.0.9-mkxpz-1.tar.gz
+RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-2/ruby-4.0.9-mkxpz-2.tar.gz
 
 # need to set the build variable because Ruby is picky
 ifeq "$(strip $(shell uname -m))" "arm64"
