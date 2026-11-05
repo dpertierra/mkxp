@@ -19,6 +19,10 @@ jobs:
         with:
           length: 7
 
+      - name: Sanitize ref name for artifact
+        shell: bash
+        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: mingw64
@@ -103,7 +107,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.windows.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.windows.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
           path: build/artifact
 
   build-linux-native:
@@ -114,6 +118,10 @@ jobs:
         id: short-sha
         with:
           length: 7
+
+      - name: Sanitize ref name for artifact
+        shell: bash
+        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -162,7 +170,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
           path: build/local
 
   build-linux-cross:
@@ -212,6 +220,10 @@ jobs:
         id: short-sha
         with:
           length: 7
+
+      - name: Sanitize ref name for artifact
+        shell: bash
+        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -275,7 +287,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.linux.ubuntu.22.04.${{matrix.arch_mkxpz}}.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.linux.ubuntu.22.04.${{matrix.arch_mkxpz}}.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
           path: build/local
 
   build-linux-native-container:
@@ -290,6 +302,10 @@ jobs:
         id: short-sha
         with:
           length: 7
+
+      - name: Sanitize ref name for artifact
+        shell: bash
+        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -330,7 +346,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.linux.debian.trixie.x86_64.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.linux.debian.trixie.x86_64.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
           path: build/local
 
   build-linux-cross-container:
@@ -385,6 +401,10 @@ jobs:
         with:
           length: 7
 
+      - name: Sanitize ref name for artifact
+        shell: bash
+        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+
       - name: Checkout repository
         uses: actions/checkout@v5
 
@@ -431,7 +451,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.linux.debian.trixie.${{matrix.arch_mkxpz}}.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.linux.debian.trixie.${{matrix.arch_mkxpz}}.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
           path: build/local
 
   build-macos:
@@ -442,6 +462,10 @@ jobs:
         id: short-sha
         with:
           length: 7
+
+      - name: Sanitize ref name for artifact
+        shell: bash
+        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
 
       - name: Remove pre-existing homebrew packages
         run: brew remove --force $(brew list)
@@ -482,5 +506,5 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.macos.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.macos.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
           path: build/Build/Products/Release/Z-universal.app.zip
