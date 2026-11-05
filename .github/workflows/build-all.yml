@@ -87,12 +87,12 @@ jobs:
           # Diagnostics: if the build stalls, dump live processes and the latest mkmf logs.
           timeout 30m make USE_SYSTEM_OPENSSL=1 || {
             rc=$?
-            ( cd downloads/mingw64/ruby && [ -x miniruby.exe ] && {
-              echo 'Thread.new { sleep 60; $stderr.puts "== watchdog: main thread backtrace =="; $stderr.puts Thread.main.backtrace; $stderr.flush; exit!(3) }' > watchdog.rb
-              echo "::group::generic_erb watchdog"
-              timeout 120 ./miniruby.exe -I./lib -I. -I.ext/common -r./watchdog.rb ./tool/generic_erb.rb -o ./configure-ext-diag.mk -c ./template/configure-ext.mk.tmpl --srcdir=. --miniruby=./miniruby.exe; echo "generic_erb exit=$?"
+            set +e
+            ( cd downloads/mingw64/ruby
+              echo "::group::serial retry: make V=1 ext/configure-ext.mk"
+              timeout 180 make -j1 V=1 ext/configure-ext.mk; echo "serial retry exit=$?"
               echo "::endgroup::"
-            } )
+            )
             echo "::group::processes"; ps -efW || ps -ef; echo "::endgroup::"
             for f in $(ls -t downloads/mingw64/ruby/ext/*/mkmf.log downloads/mingw64/ruby/.bundle/gems/*/ext/*/mkmf.log 2>/dev/null | head -3); do
               echo "::group::$f"; tail -n 60 "$f"; echo "::endgroup::"
