@@ -321,7 +321,7 @@ $(LIBDIR)/libgomp.a: $(shell $(CC) --print-file-name=libgomp.a) init_dirs
 openssl: init_dirs $(LIBDIR)/libssl.a
 $(LIBDIR)/libssl.a: $(DOWNLOADS)/openssl/Makefile
 	cd $(DOWNLOADS)/openssl; \
-	make -j$(NPROC); make install_sw
+	make -j1; make install_sw
 
 $(DOWNLOADS)/openssl/Makefile: $(DOWNLOADS)/openssl/Configure
 	cd $(DOWNLOADS)/openssl; \
