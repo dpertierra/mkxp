@@ -58,6 +58,7 @@ jobs:
             mingw-w64-x86_64-autotools
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-libgomp
+            mingw-w64-x86_64-openssl
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,7 +74,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd windows
-          make
+          make USE_SYSTEM_OPENSSL=1
 
       - name: Build exe
         shell: msys2 {0}

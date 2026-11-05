@@ -13,6 +13,9 @@ LIBDIR := $(BUILD_PREFIX)/lib
 BINDIR := $(BUILD_PREFIX)/bin
 INCLUDEDIR := $(BUILD_PREFIX)/include
 DOWNLOADS := ${PWD}/downloads/$(ARCH)
+MINGW_PREFIX ?= /mingw64
+# When 1, copy msys2's prebuilt static OpenSSL (mingw-w64-x86_64-openssl) from $(MINGW_PREFIX) instead of building it.
+USE_SYSTEM_OPENSSL ?= 0
 NPROC := $(shell nproc)
 CFLAGS := -I$(INCLUDEDIR) -O3
 LDFLAGS := -L$(LIBDIR)
@@ -319,9 +322,18 @@ $(LIBDIR)/libgomp.a: $(shell $(CC) --print-file-name=libgomp.a) init_dirs
 
 # OpenSSL
 openssl: init_dirs $(LIBDIR)/libssl.a
+ifeq ($(USE_SYSTEM_OPENSSL),1)
+$(LIBDIR)/libssl.a:
+	mkdir -p $(LIBDIR)/pkgconfig $(BUILD_PREFIX)/include
+	cp $(MINGW_PREFIX)/lib/libssl.a $(MINGW_PREFIX)/lib/libcrypto.a $(LIBDIR)/
+	cp -r $(MINGW_PREFIX)/include/openssl $(BUILD_PREFIX)/include/
+	cp $(MINGW_PREFIX)/lib/pkgconfig/openssl.pc $(MINGW_PREFIX)/lib/pkgconfig/libssl.pc $(MINGW_PREFIX)/lib/pkgconfig/libcrypto.pc $(LIBDIR)/pkgconfig/
+	sed -i 's|^prefix=.*|prefix=$(BUILD_PREFIX)|' $(LIBDIR)/pkgconfig/openssl.pc $(LIBDIR)/pkgconfig/libssl.pc $(LIBDIR)/pkgconfig/libcrypto.pc
+else
 $(LIBDIR)/libssl.a: $(DOWNLOADS)/openssl/Makefile
 	cd $(DOWNLOADS)/openssl; \
 	make -j1; make install_sw
+endif
 
 $(DOWNLOADS)/openssl/Makefile: $(DOWNLOADS)/openssl/Configure
 	cd $(DOWNLOADS)/openssl; \
