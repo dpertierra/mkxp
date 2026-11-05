@@ -21,6 +21,8 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
+RUBY_REPO   ?= $(GITHUB)/dpertierra/ruby
+RUBY_BRANCH ?= mkxp-z-4.0.x
 
 CONFIGURE_ENV := \
 	CMAKE_POLICY_VERSION_MINIMUM=3.10 \
