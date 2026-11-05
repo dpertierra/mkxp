@@ -157,6 +157,11 @@ El build de Linux enlaza Ruby como biblioteca compartida (`libruby.so.3.1`), as�
    ```
    Sustituir la línea `$(CLONE) $(GITHUB)/mkxp-z/ruby ... mkxp-z-3.1.3` por `$(CLONE) $(RUBY_REPO) ... --branch $(RUBY_BRANCH)`
    en `linux/Makefile:387`, `windows/Makefile:355` y `macos/Dependencies/common.make:355`.
+   **Actualización:** compilar Ruby desde git exige un BASERUBY >= 3.1 con openssl (rompía macOS en CI). Los tres Makefiles
+   descargan ahora un tarball de release (`RUBY_TARBALL ?=`, release `mkxp-z-4.0.9-1` de `dpertierra/ruby`) que ya trae
+   `configure`, los fuentes generados (prism, `parse.c`) y las gemas bundled, así que no hace falta BASERUBY.
+   Regenerarlo desde el fork: `ruby tool/make-snapshot -srcdir=. -archname=ruby-4.0.9-mkxpz-N -packages=gzip <outdir> branches/mkxp-z-4.0.x`,
+   subirlo con su `.sha256` como asset de una release nueva (`gh release create`) y subir el tag en `RUBY_TARBALL` en cada cambio del fork.
 2. **Nombres de biblioteca**:
    - `linux/Makefile:368-370`: `libruby.so.3.1` → `libruby.so.4.0`.
    - `windows/Makefile:336-338`: `$(RB_PREFIX)-ruby310.dll` → `$(RB_PREFIX)-ruby400.dll`.

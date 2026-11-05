@@ -13,8 +13,7 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
-RUBY_REPO   ?= $(GITHUB)/dpertierra/ruby
-RUBY_BRANCH ?= mkxp-z-4.0.x
+RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-1/ruby-4.0.9-mkxpz-1.tar.gz
 
 # need to set the build variable because Ruby is picky
 ifeq "$(strip $(shell uname -m))" "arm64"
@@ -355,7 +354,8 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 	cd $(DOWNLOADS)/ruby; autoreconf -i
 
 $(DOWNLOADS)/ruby/configure.ac:
-	$(CLONE) $(RUBY_REPO) $(DOWNLOADS)/ruby --single-branch -b $(RUBY_BRANCH) --depth 1;
+	mkdir -p $(DOWNLOADS)/ruby; \
+	curl -fsSL $(RUBY_TARBALL) | tar -xzf - -C $(DOWNLOADS)/ruby --strip-components=1;
 	sed -i '' '/: $${PRELOADENV=DYLD_INSERT_LIBRARIES}/g' $(DOWNLOADS)/ruby/configure.ac
 
 # ====

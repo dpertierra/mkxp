@@ -21,8 +21,7 @@ PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
-RUBY_REPO   ?= $(GITHUB)/dpertierra/ruby
-RUBY_BRANCH ?= mkxp-z-4.0.x
+RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-1/ruby-4.0.9-mkxpz-1.tar.gz
 
 CONFIGURE_ENV := \
 	CMAKE_POLICY_VERSION_MINIMUM=3.10 \
@@ -355,7 +354,8 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 	cd $(DOWNLOADS)/ruby; autoreconf -i
 
 $(DOWNLOADS)/ruby/configure.ac:
-	$(CLONE) $(RUBY_REPO) $(DOWNLOADS)/ruby --single-branch --branch $(RUBY_BRANCH) --depth 1;
+	mkdir -p $(DOWNLOADS)/ruby; \
+	curl -fsSL $(RUBY_TARBALL) | tar -xzf - -C $(DOWNLOADS)/ruby --strip-components=1;
 
 # ====
 init_dirs:
