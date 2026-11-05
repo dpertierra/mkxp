@@ -487,7 +487,8 @@
 
     // Determines whether MJIT is enabled. This probably
     // won't work unless you also have the header file
-    // that it needs. Only works with Ruby 2.6 or higher.
+    // that it needs. Only works with Ruby below 3.3 (MJIT
+    // was removed in 3.3); ignored otherwise.
     // This Ruby feature is experimental.
     // (default: false)
     //
@@ -513,8 +514,8 @@
     // "JITMinCalls": 10000,
 
     // Determines whether YJIT is enabled.
-    // Only works with Ruby 3.1 or higher.
-    // This Ruby feature is experimental.
+    // Requires Ruby 3.1 or higher.
+    // Built only on Linux and macOS; no effect on Windows.
     // (default: false)
     //
     // "YJITEnable": false,

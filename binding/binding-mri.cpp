@@ -1188,6 +1188,12 @@ static void mriBindingExecute() {
     std::vector<const char*> rubyArgsC{"mkxp-z"};
     rubyArgsC.push_back("-e ");
     void *node;
+#if RAPI_FULL >= 330
+    // MJIT was removed in Ruby 3.3; passing --mjit would make the VM abort.
+    if (conf.jit.enabled)
+        Debug() << "JITEnable (MJIT) is not supported on Ruby 3.3+; ignoring. Use YJITEnable instead.";
+    if (conf.yjit.enabled) {
+#else
     if (conf.jit.enabled) {
 #if RAPI_FULL >= 310
         // Ruby v3.1.0 renamed the --jit options to --mjit.
@@ -1210,6 +1216,7 @@ static void mriBindingExecute() {
         rubyArgsC.push_back(minCalls.c_str());
         node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
     } else if (conf.yjit.enabled) {
+#endif
         rubyArgsC.push_back("--yjit");
         // TODO: Maybe support --yjit-exec-mem-size, --yjit-call-threshold
         node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
