@@ -60,6 +60,16 @@ jobs:
             mingw-w64-x86_64-libgomp
             mingw-w64-x86_64-openssl
 
+      - name: Pin msys2-runtime 3.6.9
+        # msys2-runtime 3.6.10+ regression makes make/git hang at random (msys2/msys2-runtime#362).
+        shell: msys2 {0}
+        run: |
+          pacman -Q msys2-runtime msys2-runtime-devel || true
+          base=https://repo.msys2.org/msys/x86_64
+          pkgs="$base/msys2-runtime-3.6.9-2-x86_64.pkg.tar.zst"
+          if pacman -Q msys2-runtime-devel >/dev/null 2>&1; then pkgs="$pkgs $base/msys2-runtime-devel-3.6.9-2-x86_64.pkg.tar.zst"; fi
+          pacman -U --noconfirm $pkgs
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
