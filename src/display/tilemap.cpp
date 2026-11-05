@@ -983,6 +983,9 @@ struct TilemapPrivate
 	{
 		ZLayer *const *zlayers = elem.zlayers;
 
+		/* Batching relies on the list order being current */
+		zlayers[0]->scene->sortIfNeeded();
+
 		for (size_t i = 0; i < elem.activeLayers; ++i)
 		{
 			ZLayer *batchHead = zlayers[i];
@@ -1141,7 +1144,7 @@ void ZLayer::setIndex(int value)
 	index = value;
 
 	z = calculateZ(p, index);
-	scene->reinsert(*this);
+	scene->needsSort = true;
 
 	vboOffset = p->zlayerBases[index] * sizeof(index_t) * 6;
 	vboCount = p->zlayerSize(index) * 6;

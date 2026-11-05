@@ -22,6 +22,8 @@
 #ifndef SCENE_H
 #define SCENE_H
 
+#include <vector>
+
 #include "util.h"
 #include "intrulist.h"
 #include "etc.h"
@@ -61,7 +63,14 @@ public:
 
 	const Geometry &getGeometry() const { return geometry; }
 
+	/* Restores draw order if any element was added or its sort key
+	 * changed since the last call. Must be called before anything that
+	 * reads the order of 'elements'. */
+	void sortIfNeeded();
+
 protected:
+	/* Order is restored lazily: insert() only appends and marks the
+	 * scene dirty, so n z-changes cost one sort instead of n scans. */
 	void insert(SceneElement &element);
 	void insertAfter(SceneElement &element, SceneElement &after);
 	void reinsert(SceneElement &element);
@@ -71,6 +80,8 @@ protected:
 
 	IntruList<SceneElement> elements;
 	Geometry geometry;
+	bool needsSort;
+	std::vector<SceneElement*> sortBuf;
 
 	friend class SceneElement;
 	friend class Window;

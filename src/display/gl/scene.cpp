@@ -20,9 +20,12 @@
 */
 
 #include "scene.h"
+#include <algorithm>
+
 #include "sharedstate.h"
 
 Scene::Scene()
+    : needsSort(false)
 {}
 
 Scene::~Scene()
@@ -38,44 +41,42 @@ Scene::~Scene()
 
 void Scene::insert(SceneElement &element)
 {
-	IntruListLink<SceneElement> *iter;
-
-	for (iter = elements.begin(); iter != elements.end(); iter = iter->next)
-	{
-		SceneElement *e = iter->data;
-
-		if (element < *e)
-		{
-			elements.insertBefore(element.link, *iter);
-			return;
-		}
-	}
-
 	elements.append(element.link);
+	needsSort = true;
 }
 
-void Scene::insertAfter(SceneElement &element, SceneElement &after)
+/* The lazy sort yields the same order as scanning for the position,
+ * as long as 'after' sorts before 'element' (true for ZLayers) */
+void Scene::insertAfter(SceneElement &element, SceneElement &)
 {
-	IntruListLink<SceneElement> *iter;
-
-	for (iter = &after.link; iter != elements.end(); iter = iter->next)
-	{
-		SceneElement *e = iter->data;
-
-		if (element < *e)
-		{
-			elements.insertBefore(element.link, *iter);
-			return;
-		}
-	}
-
-	elements.append(element.link);
+	insert(element);
 }
 
 void Scene::reinsert(SceneElement &element)
 {
 	elements.remove(element.link);
 	insert(element);
+}
+
+void Scene::sortIfNeeded()
+{
+	if (!needsSort)
+		return;
+
+	needsSort = false;
+
+	sortBuf.clear();
+
+	IntruListLink<SceneElement> *iter;
+	for (iter = elements.begin(); iter != elements.end(); iter = iter->next)
+		sortBuf.push_back(iter->data);
+
+	std::sort(sortBuf.begin(), sortBuf.end(),
+	          [](const SceneElement *a, const SceneElement *b) { return *a < *b; });
+
+	elements.clear();
+	for (SceneElement *e : sortBuf)
+		elements.append(e->link);
 }
 
 void Scene::notifyGeometryChange()
@@ -90,6 +91,8 @@ void Scene::notifyGeometryChange()
 
 void Scene::composite()
 {
+	sortIfNeeded();
+
 	IntruListLink<SceneElement> *iter;
 
 	for (iter = elements.begin(); iter != elements.end(); iter = iter->next)
@@ -144,7 +147,7 @@ void SceneElement::setZ(int value)
 		return;
 
 	z = value;
-	scene->reinsert(*this);
+	scene->needsSort = true;
 }
 
 bool SceneElement::getVisible() const
@@ -191,8 +194,14 @@ bool SceneElement::operator<(const SceneElement &o) const
 
 void SceneElement::setSpriteY(int value)
 {
+	if (spriteY == value)
+		return;
+
 	spriteY = value;
-	scene->reinsert(*this);
+
+	/* spriteY only takes part in ordering from RGSS2 on */
+	if (rgssVer >= 2)
+		scene->needsSort = true;
 }
 
 void SceneElement::unlink()
