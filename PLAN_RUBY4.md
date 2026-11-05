@@ -37,7 +37,7 @@ Enlazar MKXP-Z con Ruby 4.0.x (última versión de mantenimiento) para mejorar e
 | `configure.ac` | Enlace estático de `gcc`, `pthread`, `z`, `ffi` en mingw | Windows |
 | `4d85560` | Redefinición de `clock_gettime`/`clock_getres` | Windows |
 
-- La Base de Sky (`../LA BASE DE SKY`): 49 carpetas en `Data/Scripts`, 7 plugins.
+- La Base de Sky (`/home/diego/Documents/GitHub/La-Base-de-Sky/LA BASE DE SKY/`): 49 carpetas en `Data/Scripts`, 4 plugins.
   - `Dir.exists?` en `Data/Scripts/060_Debug/006_Map Exporter.rb:148` (eliminado en Ruby 3.2).
   - Copia propia de `Set` en `Data/Scripts/058_Utilities/002_Libraries/001_set.rb`. En Ruby 4.0 `Set` es clase del núcleo implementada en C.
   - `Data/Scripts/058_Utilities/007_Search_Sort.rb:1` añade `Data/Ruby Library 3.3.0` (106 entradas de stdlib) al `$LOAD_PATH`.
@@ -187,7 +187,7 @@ El build de Linux enlaza Ruby como biblioteca compartida (`libruby.so.3.1`), as�
 
 ## Fase 4 — Checklist del juego (repo de La Base de Sky)
 
-Los cambios se hacen en el repo del juego, no en este.
+Los cambios se hacen en el repo del juego (`/home/diego/Documents/GitHub/La-Base-de-Sky/LA BASE DE SKY/`), no en este.
 
 - [ ] `Data/Scripts/060_Debug/006_Map Exporter.rb:148`: `Dir.exists?` → `Dir.exist?`.
 - [ ] `Data/Scripts/058_Utilities/002_Libraries/001_set.rb`: en 4.0 `Set` es clase del núcleo. Cargar la copia solo cuando `RUBY_VERSION < "4.0"` (envolver el archivo en ese `if`).
