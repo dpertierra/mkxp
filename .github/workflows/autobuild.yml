@@ -57,7 +57,15 @@ jobs:
         shell: msys2 {0}
         run: |
           cd windows
-          make USE_SYSTEM_OPENSSL=1
+          # Diagnostics: if the build stalls, dump live processes and the latest mkmf logs.
+          timeout 40m make USE_SYSTEM_OPENSSL=1 || {
+            rc=$?
+            echo "::group::processes"; ps -efW || ps -ef; echo "::endgroup::"
+            for f in $(ls -t downloads/mingw64/ruby/ext/*/mkmf.log downloads/mingw64/ruby/.bundle/gems/*/ext/*/mkmf.log 2>/dev/null | head -3); do
+              echo "::group::$f"; tail -n 60 "$f"; echo "::endgroup::"
+            done
+            exit $rc
+          }
 
       - name: Build exe
         shell: msys2 {0}
