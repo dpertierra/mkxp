@@ -341,6 +341,9 @@ $(LIBDIR)/libruby.4.0.dylib: $(DOWNLOADS)/ruby/Makefile
 	cd $(DOWNLOADS)/ruby; \
 	$(CONFIGURE_ENV) make -j$(NPROC); $(CONFIGURE_ENV) make install
 	install_name_tool -id @rpath/libruby.4.0.dylib $(LIBDIR)/libruby.4.0.dylib
+	# rbs (bundled gem since Ruby 3.x) ships include/rbs/string.h etc.; Xcode's recursive
+	# header search paths would pick it up instead of the SDK's <string.h>.
+	rm -rf $(DOWNLOADS)/ruby/.bundle/gems/rbs-*/include $(LIBDIR)/ruby/gems/*/gems/rbs-*/include
 
 # -std=gnu99 is needed with GCC 15 and higher (which default to gnu23), for Ruby versions that aren't valid C23.
 # Ruby versions that are valid C23 are 3.2.9+, 3.3.9+, 3.4.5+, and 3.5.0+.
