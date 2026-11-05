@@ -180,6 +180,8 @@ jobs:
         run: |
           cd macos/Dependencies
           brew bundle
+          # setup-ruby's prebuilt Ruby (BASERUBY) links Homebrew gmp; Ruby itself is built --without-gmp
+          brew install gmp
 
       - uses: ruby/setup-ruby@v1
         with:
