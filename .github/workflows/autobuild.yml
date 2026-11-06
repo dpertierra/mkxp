@@ -72,8 +72,13 @@ jobs:
             rc=$?
             set +e
             ( cd downloads/mingw64/ruby
+              echo "::group::direct generic_erb (no make)"
+              echo 'Thread.new { sleep 60; $stderr.puts "== watchdog: main thread backtrace =="; $stderr.puts Thread.main.backtrace; $stderr.flush; exit!(3) }' > watchdog.rb
+              time timeout 300 ./miniruby.exe -I./lib -I. -I.ext/common -r./watchdog.rb ./tool/generic_erb.rb -o ext/configure-ext-diag.mk -c ./template/configure-ext.mk.tmpl --srcdir="." --miniruby="./miniruby.exe -I./lib -I. -I.ext/common " --script-args='--extout=".ext" --ext-build-dir="./ext" --mflags="-j1" --make-flags=" -j1 -- V=1"'; echo "direct exit=$?"
+              ls -la ext/configure-ext-diag.mk
+              echo "::endgroup::"
               echo "::group::serial retry: make V=1 ext/configure-ext.mk"
-              timeout 180 make -j1 V=1 ext/configure-ext.mk; echo "serial retry exit=$?"
+              time timeout 600 make -j1 V=1 ext/configure-ext.mk; echo "serial retry exit=$?"
               echo "::endgroup::"
             )
             echo "::group::processes"; ps -efW || ps -ef; echo "::endgroup::"
