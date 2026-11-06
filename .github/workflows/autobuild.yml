@@ -68,7 +68,7 @@ jobs:
         run: |
           cd windows
           # Diagnostics: if the build stalls, dump live processes and the latest mkmf logs.
-          timeout 30m make USE_SYSTEM_OPENSSL=1 || {
+          timeout 100m make USE_SYSTEM_OPENSSL=1 || {
             rc=$?
             echo "::group::processes"; ps -efW || ps -ef; echo "::endgroup::"
             for f in $(ls -t downloads/mingw64/ruby/ext/*/mkmf.log downloads/mingw64/ruby/.bundle/gems/*/ext/*/mkmf.log 2>/dev/null | head -3); do
