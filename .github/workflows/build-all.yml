@@ -47,18 +47,18 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: mingw64
+          msystem: ucrt64
           install: >-
             base-devel
             git
             ruby
             vim
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-meson
-            mingw-w64-x86_64-autotools
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-libgomp
-            mingw-w64-x86_64-openssl
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-autotools
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-libgomp
+            mingw-w64-ucrt-x86_64-openssl
 
       - name: Pin msys2-runtime 3.6.9
         # msys2-runtime 3.6.10+ regression makes make/git hang at random (msys2/msys2-runtime#362).
@@ -87,29 +87,6 @@ jobs:
           # Diagnostics: if the build stalls, dump live processes and the latest mkmf logs.
           timeout 30m make USE_SYSTEM_OPENSSL=1 || {
             rc=$?
-            set +e
-            ( cd downloads/mingw64/ruby
-              mkdir -p probes
-              echo 'p 1' > probes/01_p.rb
-              echo 'p "a --jobserver-auth=x b".gsub(/\A|[\s"\x27]\K--jobserver-auth=[^\s\x27"]*/, "")' > probes/02_gsub.rb
-              echo 'require "optparse"; p :optparse' > probes/03_optparse.rb
-              echo 'require "erb"; p :erb' > probes/04_erb.rb
-              echo 'p Dir.glob("ext/**/extconf.rb").size' > probes/05_glob_ext.rb
-              echo 'p Dir.glob(".bundle/gems/**/extconf.rb").size' > probes/06_glob_gems.rb
-              echo 'Thread.new { sleep 1 }.join; p :thread' > probes/07_thread.rb
-              run_probes() {
-                for p in probes/*.rb; do
-                  echo "== $1 $p"; timeout 30 ./miniruby.exe -I./lib -I. -I.ext/common "$p"; echo "exit=$?"
-                done
-              }
-              echo "::group::miniruby probes (LTO build)"; run_probes lto; echo "::endgroup::"
-              echo "::group::rebuild miniruby without LTO"
-              sed -i 's/ -flto\b//g; s/-flto //g' Makefile; grep -c -- -flto Makefile
-              find . -name '*.o' -delete; rm -f miniruby.exe
-              time timeout 1200 make -j$(nproc) miniruby.exe; echo "rebuild exit=$?"
-              echo "::endgroup::"
-              echo "::group::miniruby probes (no LTO)"; run_probes nolto; echo "::endgroup::"
-            )
             echo "::group::processes"; ps -efW || ps -ef; echo "::endgroup::"
             for f in $(ls -t downloads/mingw64/ruby/ext/*/mkmf.log downloads/mingw64/ruby/.bundle/gems/*/ext/*/mkmf.log 2>/dev/null | head -3); do
               echo "::group::$f"; tail -n 60 "$f"; echo "::endgroup::"
@@ -131,9 +108,9 @@ jobs:
         run: |
           mkdir build/artifact
           cd build/artifact
-          cp /mingw64/bin/libgomp-1.dll .
-          cp /mingw64/bin/zlib1.dll .
-          cp ../../windows/build-mingw64/bin/x64-msvcrt-ruby400.dll .
+          cp /ucrt64/bin/libgomp-1.dll .
+          cp /ucrt64/bin/zlib1.dll .
+          cp ../../windows/build-mingw64/bin/x64-ucrt-ruby400.dll .
           cp -r ../../windows/build-mingw64/lib/ruby/4.0.0 .
           mv ./4.0.0 ./stdlib
           cp ../mkxp-z.exe .

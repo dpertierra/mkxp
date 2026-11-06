@@ -1,5 +1,7 @@
 ARCH := $(shell ruby -e "puts (\`gcc -dumpmachine\`[/i686/].nil?) ? 'mingw64' : 'mingw'")
-RB_PREFIX := $(shell ruby -e "puts ('$(ARCH)' == 'mingw64') ? 'x64-msvcrt' : 'msvcrt'")
+# Ruby 4.0 only supports the UCRT runtime on Windows (msys2 UCRT64); msvcrt builds break fd I/O.
+RB_CRT := $(if $(findstring UCRT,$(MSYSTEM)),ucrt,msvcrt)
+RB_PREFIX := $(if $(filter mingw64,$(ARCH)),x64-$(RB_CRT),$(RB_CRT))
 
 SDL_FLAGS := ${SDL_FLAGS}
 SDL2_IMAGE_FLAGS := ${SDL2_IMAGE_FLAGS}
@@ -13,8 +15,8 @@ LIBDIR := $(BUILD_PREFIX)/lib
 BINDIR := $(BUILD_PREFIX)/bin
 INCLUDEDIR := $(BUILD_PREFIX)/include
 DOWNLOADS := ${PWD}/downloads/$(ARCH)
-MINGW_PREFIX ?= /mingw64
-# When 1, copy msys2's prebuilt static OpenSSL (mingw-w64-x86_64-openssl) from $(MINGW_PREFIX) instead of building it.
+MINGW_PREFIX ?= /ucrt64
+# When 1, copy msys2's prebuilt static OpenSSL (mingw-w64-ucrt-x86_64-openssl) from $(MINGW_PREFIX) instead of building it.
 USE_SYSTEM_OPENSSL ?= 0
 NPROC := $(shell nproc)
 CFLAGS := -I$(INCLUDEDIR) -O3
