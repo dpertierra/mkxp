@@ -72,14 +72,26 @@ jobs:
             rc=$?
             set +e
             ( cd downloads/mingw64/ruby
-              echo "::group::direct generic_erb (no make)"
-              echo 'Thread.new { sleep 60; $stderr.puts "== watchdog: main thread backtrace =="; $stderr.puts Thread.main.backtrace; $stderr.flush; exit!(3) }' > watchdog.rb
-              time timeout 300 ./miniruby.exe -I./lib -I. -I.ext/common -r./watchdog.rb ./tool/generic_erb.rb -o ext/configure-ext-diag.mk -c ./template/configure-ext.mk.tmpl --srcdir="." --miniruby="./miniruby.exe -I./lib -I. -I.ext/common " --script-args='--extout=".ext" --ext-build-dir="./ext" --mflags="-j1" --make-flags=" -j1 -- V=1"'; echo "direct exit=$?"
-              ls -la ext/configure-ext-diag.mk
+              mkdir -p probes
+              echo 'p 1' > probes/01_p.rb
+              echo 'p "a --jobserver-auth=x b".gsub(/\A|[\s"\x27]\K--jobserver-auth=[^\s\x27"]*/, "")' > probes/02_gsub.rb
+              echo 'require "optparse"; p :optparse' > probes/03_optparse.rb
+              echo 'require "erb"; p :erb' > probes/04_erb.rb
+              echo 'p Dir.glob("ext/**/extconf.rb").size' > probes/05_glob_ext.rb
+              echo 'p Dir.glob(".bundle/gems/**/extconf.rb").size' > probes/06_glob_gems.rb
+              echo 'Thread.new { sleep 1 }.join; p :thread' > probes/07_thread.rb
+              run_probes() {
+                for p in probes/*.rb; do
+                  echo "== $1 $p"; timeout 30 ./miniruby.exe -I./lib -I. -I.ext/common "$p"; echo "exit=$?"
+                done
+              }
+              echo "::group::miniruby probes (LTO build)"; run_probes lto; echo "::endgroup::"
+              echo "::group::rebuild miniruby without LTO"
+              sed -i 's/ -flto\b//g; s/-flto //g' Makefile; grep -c -- -flto Makefile
+              find . -name '*.o' -delete; rm -f miniruby.exe
+              time timeout 1200 make -j$(nproc) miniruby.exe; echo "rebuild exit=$?"
               echo "::endgroup::"
-              echo "::group::serial retry: make V=1 ext/configure-ext.mk"
-              time timeout 600 make -j1 V=1 ext/configure-ext.mk; echo "serial retry exit=$?"
-              echo "::endgroup::"
+              echo "::group::miniruby probes (no LTO)"; run_probes nolto; echo "::endgroup::"
             )
             echo "::group::processes"; ps -efW || ps -ef; echo "::endgroup::"
             for f in $(ls -t downloads/mingw64/ruby/ext/*/mkmf.log downloads/mingw64/ruby/.bundle/gems/*/ext/*/mkmf.log 2>/dev/null | head -3); do
