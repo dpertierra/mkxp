@@ -669,6 +669,7 @@ DEF_ATTR_RD_SIMPLE(Sprite, ZoomX,      float,   p->realZoomX)
 DEF_ATTR_RD_SIMPLE(Sprite, ZoomY,      float,   p->realZoomY)
 DEF_ATTR_RD_SIMPLE(Sprite, Angle,      float,   p->trans.getRotation())
 DEF_ATTR_RD_SIMPLE(Sprite, Taper,      float,   p->trans.getTaper())
+DEF_ATTR_RD_SIMPLE(Sprite, TaperCenter, float,  p->trans.getTaperCenter())
 DEF_ATTR_RD_SIMPLE(Sprite, Mirror,     bool,    p->mirrored)
 DEF_ATTR_RD_SIMPLE(Sprite, BushDepth,  int,     p->bushDepth)
 DEF_ATTR_RD_SIMPLE(Sprite, BlendType,  int,     p->blendType)
@@ -830,6 +831,17 @@ void Sprite::setTaper(float value)
         return;
 
     p->trans.setTaper(value);
+}
+
+void Sprite::setTaperCenter(float value)
+{
+    guardDisposed();
+
+    float cur = p->trans.getTaperCenter();
+    if (cur == value || (std::isnan(cur) && std::isnan(value)))
+        return;
+
+    p->trans.setTaperCenter(value);
 }
 
 void Sprite::setMirror(bool mirrored)
