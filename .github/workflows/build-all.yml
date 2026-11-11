@@ -36,6 +36,11 @@ jobs:
         with:
           length: 7
 
+      # Nombre de rama apto para artefactos: upload-artifact rechaza '/'.
+      - id: ref
+        shell: bash
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: mingw64
@@ -92,7 +97,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.windows.${{github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.windows.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/artifact
 
   build-linux:
@@ -104,6 +109,11 @@ jobs:
         id: short-sha
         with:
           length: 7
+
+      # Nombre de rama apto para artefactos: upload-artifact rechaza '/'.
+      - id: ref
+        shell: bash
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -144,7 +154,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/local
 
   build-macos:
@@ -156,6 +166,11 @@ jobs:
         id: short-sha
         with:
           length: 7
+
+      # Nombre de rama apto para artefactos: upload-artifact rechaza '/'.
+      - id: ref
+        shell: bash
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Remove pre-existing homebrew packages
         run: brew remove --force $(brew list)
@@ -196,5 +211,5 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.macos.${{github.ref_name}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.macos.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/Build/Products/Release/Z-universal.app.zip
