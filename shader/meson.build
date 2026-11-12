@@ -21,6 +21,7 @@ embedded_shaders = [
     'simple.vert',
     'simpleColor.vert',
     'sprite.vert',
+    'sprite25d.vert',
     'tilemap.vert',
     'tilemapvx.vert',
     'blur.frag',

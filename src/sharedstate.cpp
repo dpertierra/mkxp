@@ -122,7 +122,7 @@ struct SharedStatePrivate
         
         startupTime = std::chrono::steady_clock::now();
         
-		/* Shaders have been compiled in ShaderSet's constructor */
+		/* Legacy shaders compile in ShaderSet's constructor; the perspective shader compiles on first use. */
 		if (gl.ReleaseShaderCompiler)
 			gl.ReleaseShaderCompiler();
 

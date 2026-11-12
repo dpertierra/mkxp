@@ -25,6 +25,7 @@
 #include "sharedstate.h"
 #include "glstate.h"
 #include "exception.h"
+#include "viewport.h"
 
 #include <assert.h>
 #include <string.h>
@@ -55,6 +56,7 @@
 #include "simple.vert.xxd"
 #include "simpleColor.vert.xxd"
 #include "sprite.vert.xxd"
+#include "sprite25d.vert.xxd"
 #include "tilemap.vert.xxd"
 #include "blur.frag.xxd"
 #include "simpleMatrix.vert.xxd"
@@ -648,6 +650,58 @@ void SpriteShader::setPatternZoom(const Vec2 &zoom)
 void SpriteShader::setInvert(bool value)
 {
     gl.Uniform1i(u_invert, value);
+}
+
+PerspectiveSpriteShader::PerspectiveSpriteShader()
+{
+	INIT_SHADER(sprite25d, sprite, PerspectiveSpriteShader);
+	ShaderBase::init();
+	GET_U(spriteMat); GET_U(table); GET_U(segments); GET_U(segmentCount); GET_U(centerX);
+	GET_U(perspectiveMode); GET_U(perspectiveAnchor); GET_U(perspectiveGain); GET_U(perspectiveLift);
+	GET_U(tone); GET_U(color); GET_U(opacity); GET_U(bushY); GET_U(bushUnder);
+	GET_U(bushSlope); GET_U(bushIntercept); GET_U(bushOpacity); GET_U(pattern);
+	GET_U(patternBlendType); GET_U(patternTile); GET_U(renderPattern); GET_U(patternSizeInv);
+	GET_U(patternOpacity); GET_U(patternScroll); GET_U(patternZoom); GET_U(invert);
+}
+
+void PerspectiveSpriteShader::setSpriteMat(const float value[16]) { gl.UniformMatrix4fv(u_spriteMat, 1, GL_FALSE, value); }
+void PerspectiveSpriteShader::setPerspective(const PerspectiveTable &t, int mode, float anchor, float gain, float lift)
+{
+	gl.Uniform4fv(u_table, PERSPECTIVE_SAMPLES, &t.samples[0].x);
+	float segments[PERSPECTIVE_MAX_SEGMENTS * 4] = { 0 };
+	for (int i = 0; i < t.segmentCount; ++i) {
+		segments[i * 4] = t.segments[i].yStart;
+		segments[i * 4 + 1] = t.segments[i].yStep;
+		segments[i * 4 + 2] = (float)t.segments[i].firstIndex;
+		segments[i * 4 + 3] = (float)t.segments[i].count;
+	}
+	gl.Uniform4fv(u_segments, PERSPECTIVE_MAX_SEGMENTS, segments);
+	gl.Uniform1i(u_segmentCount, t.segmentCount);
+	gl.Uniform1f(u_centerX, t.centerX); gl.Uniform1i(u_perspectiveMode, mode);
+	gl.Uniform1f(u_perspectiveAnchor, anchor); gl.Uniform1f(u_perspectiveGain, gain); gl.Uniform1f(u_perspectiveLift, lift);
+}
+void PerspectiveSpriteShader::setTone(const Vec4 &v) { setVec4Uniform(u_tone, v); }
+void PerspectiveSpriteShader::setColor(const Vec4 &v) { setVec4Uniform(u_color, v); }
+void PerspectiveSpriteShader::setOpacity(float v) { gl.Uniform1f(u_opacity, v); }
+void PerspectiveSpriteShader::setBushDepth(bool y, bool under, float slope, float intercept)
+{ gl.Uniform1f(u_bushY, y); gl.Uniform1f(u_bushUnder, under); gl.Uniform1f(u_bushSlope, slope); gl.Uniform1f(u_bushIntercept, intercept); }
+void PerspectiveSpriteShader::setBushOpacity(float v) { gl.Uniform1f(u_bushOpacity, v); }
+void PerspectiveSpriteShader::setPattern(const TEX::ID p, const Vec2 &d)
+{ setTexUniform(u_pattern, 1, p); gl.Uniform2f(u_patternSizeInv, 1.f / d.x, 1.f / d.y); }
+void PerspectiveSpriteShader::setPatternBlendType(int v) { gl.Uniform1i(u_patternBlendType, v); }
+void PerspectiveSpriteShader::setPatternTile(bool v) { gl.Uniform1i(u_patternTile, v); }
+void PerspectiveSpriteShader::setShouldRenderPattern(bool v) { gl.Uniform1i(u_renderPattern, v); }
+void PerspectiveSpriteShader::setPatternOpacity(float v) { gl.Uniform1f(u_patternOpacity, v); }
+void PerspectiveSpriteShader::setPatternScroll(const Vec2 &v) { setVec2Uniform(u_patternScroll, v); }
+void PerspectiveSpriteShader::setPatternZoom(const Vec2 &v) { setVec2Uniform(u_patternZoom, v); }
+void PerspectiveSpriteShader::setInvert(bool v) { gl.Uniform1i(u_invert, v); }
+
+ShaderSet::ShaderSet() : perspectiveSpriteShader(0) {}
+ShaderSet::~ShaderSet() { delete perspectiveSpriteShader; }
+PerspectiveSpriteShader &ShaderSet::perspectiveSprite()
+{
+	if (!perspectiveSpriteShader) perspectiveSpriteShader = new PerspectiveSpriteShader;
+	return *perspectiveSpriteShader;
 }
 
 

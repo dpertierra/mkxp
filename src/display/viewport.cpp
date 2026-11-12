@@ -29,6 +29,7 @@
 #include "graphics.h"
 
 #include <SDL_rect.h>
+#include <cmath>
 
 #include "sigslot/signal.hpp"
 
@@ -124,6 +125,7 @@ Viewport::Viewport()
 void Viewport::initViewport(int x, int y, int width, int height)
 {
 	p = new ViewportPrivate(x, y, width, height, this);
+	m_perspective.centerX = width / 2.0f;
 
 	/* Set our own geometry */
 	geometry.rect = IntRect(x, y, width, height);
@@ -142,6 +144,43 @@ void Viewport::update()
 	guardDisposed();
 
 	Flashable::update();
+}
+
+const PerspectiveTable &Viewport::perspectiveTable() const { return m_perspective; }
+
+void Viewport::setPerspective(const PerspectiveSegment *segments, int segmentCount, const float *values)
+{
+	if (m_perspective.enabled && m_perspective.segmentCount == segmentCount) {
+		bool same = true;
+		for (int i = 0; i < segmentCount; ++i)
+			if (m_perspective.segments[i].yStart != segments[i].yStart || m_perspective.segments[i].yStep != segments[i].yStep ||
+			    m_perspective.segments[i].firstIndex != segments[i].firstIndex || m_perspective.segments[i].count != segments[i].count) { same = false; break; }
+		for (int i = 0; i < PERSPECTIVE_SAMPLES; ++i)
+			if (m_perspective.samples[i].x != values[i * 3] || m_perspective.samples[i].y != values[i * 3 + 1] || m_perspective.samples[i].z != values[i * 3 + 2]) { same = false; break; }
+		if (same) return;
+	}
+	m_perspective.segmentCount = segmentCount;
+	for (int i = 0; i < segmentCount; ++i) m_perspective.segments[i] = segments[i];
+	for (int i = 0; i < PERSPECTIVE_SAMPLES; ++i)
+		m_perspective.samples[i] = Vec4(values[i * 3], values[i * 3 + 1], values[i * 3 + 2], 0);
+	m_perspective.enabled = true;
+	++m_perspective.generation;
+}
+
+void Viewport::clearPerspective()
+{
+	if (!m_perspective.enabled) return;
+	m_perspective.enabled = false;
+	m_perspective.segmentCount = 0;
+	m_perspective.centerX = p->rect->width / 2.0f;
+	++m_perspective.generation;
+}
+
+void Viewport::setPerspectiveCenterX(float value)
+{
+	if (m_perspective.centerX == value) return;
+	m_perspective.centerX = value;
+	++m_perspective.generation;
 }
 
 DEF_ATTR_RD_SIMPLE(Viewport, OX,   int,   geometry.orig.x)

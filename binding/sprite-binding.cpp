@@ -79,6 +79,11 @@ DEF_GFX_PROP_F(Sprite, Angle)
 DEF_GFX_PROP_F(Sprite, Taper)
 DEF_GFX_PROP_F(Sprite, TaperCenter)
 DEF_GFX_PROP_F(Sprite, XOffset)
+DEF_GFX_PROP_I(Sprite, PerspectiveMode)
+DEF_GFX_PROP_F(Sprite, PerspectiveAnchor)
+DEF_GFX_PROP_F(Sprite, PerspectiveGain)
+DEF_GFX_PROP_F(Sprite, PerspectiveLift)
+DEF_GFX_PROP_I(Sprite, PerspectiveSlices)
 DEF_GFX_PROP_F(Sprite, WavePhase)
 DEF_GFX_PROP_F(Sprite, PatternZoomX)
 DEF_GFX_PROP_F(Sprite, PatternZoomY)
@@ -137,6 +142,11 @@ void spriteBindingInit() {
     INIT_PROP_BIND(Sprite, Taper, "taper");
     INIT_PROP_BIND(Sprite, TaperCenter, "taper_center");
     INIT_PROP_BIND(Sprite, XOffset, "x_offset");
+    INIT_PROP_BIND(Sprite, PerspectiveMode, "perspective_mode");
+    INIT_PROP_BIND(Sprite, PerspectiveAnchor, "perspective_anchor");
+    INIT_PROP_BIND(Sprite, PerspectiveGain, "perspective_gain");
+    INIT_PROP_BIND(Sprite, PerspectiveLift, "perspective_lift");
+    INIT_PROP_BIND(Sprite, PerspectiveSlices, "perspective_slices");
     INIT_PROP_BIND(Sprite, Mirror, "mirror");
     INIT_PROP_BIND(Sprite, BushDepth, "bush_depth");
     INIT_PROP_BIND(Sprite, Opacity, "opacity");

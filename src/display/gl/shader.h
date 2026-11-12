@@ -26,6 +26,8 @@
 #include "gl-util.h"
 #include "glstate.h"
 
+struct PerspectiveTable;
+
 class ShaderNoConstructTag {};
 
 class Shader
@@ -210,6 +212,32 @@ private:
 	GLint u_spriteMat, u_tone, u_opacity, u_color,
     u_bushY, u_bushUnder, u_bushSlope, u_bushIntercept, u_bushOpacity, u_pattern, u_renderPattern,
     u_patternBlendType, u_patternSizeInv, u_patternTile, u_patternOpacity, u_patternScroll, u_patternZoom, u_invert;
+};
+
+class PerspectiveSpriteShader : public ShaderBase
+{
+public:
+	PerspectiveSpriteShader();
+	void setSpriteMat(const float value[16]);
+	void setPerspective(const PerspectiveTable &table, int mode, float anchor, float gain, float lift);
+	void setTone(const Vec4 &value);
+	void setColor(const Vec4 &value);
+	void setOpacity(float value);
+	void setBushDepth(bool bushY, bool bushUnder, float bushSlope, float bushIntercept);
+	void setBushOpacity(float value);
+	void setPattern(const TEX::ID pattern, const Vec2 &dimensions);
+	void setPatternBlendType(int value);
+	void setPatternTile(bool value);
+	void setShouldRenderPattern(bool value);
+	void setPatternOpacity(float value);
+	void setPatternScroll(const Vec2 &value);
+	void setPatternZoom(const Vec2 &value);
+	void setInvert(bool value);
+private:
+	GLint u_spriteMat, u_table, u_segments, u_segmentCount, u_centerX;
+	GLint u_perspectiveMode, u_perspectiveAnchor, u_perspectiveGain, u_perspectiveLift;
+	GLint u_tone, u_opacity, u_color, u_bushY, u_bushUnder, u_bushSlope, u_bushIntercept, u_bushOpacity;
+	GLint u_pattern, u_renderPattern, u_patternBlendType, u_patternSizeInv, u_patternTile, u_patternOpacity, u_patternScroll, u_patternZoom, u_invert;
 };
 
 class PlaneShader : public ShaderBase
@@ -452,6 +480,10 @@ protected:
 /* Global object containing all available shaders */
 struct ShaderSet
 {
+	ShaderSet();
+	~ShaderSet();
+	PerspectiveSpriteShader &perspectiveSprite();
+	PerspectiveSpriteShader *perspectiveSpriteShader;
 	FlatColorShader flatColor;
 	SimpleShader simple;
 	SimpleColorShader simpleColor;

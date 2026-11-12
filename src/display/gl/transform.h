@@ -192,6 +192,18 @@ public:
 		return matrix;
 	}
 
+	const float *getMatrixWithoutTaper()
+	{
+		if (taper == 1) return getMatrix();
+		float savedTaper = taper;
+		taper = 1;
+		dirty = true;
+		getMatrix();
+		taper = savedTaper;
+		dirty = true;
+		return matrix;
+	}
+
 private:
 	void updateMatrix()
 	{

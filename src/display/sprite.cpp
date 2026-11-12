@@ -65,12 +65,15 @@ struct SpritePrivate
      * reaches the transform. Kept apart so #x still reads back what was set. */
     int realX;
     float xOffset;
+    int perspectiveMode, perspectiveSlices;
+    float perspectiveAnchor, perspectiveGain, perspectiveLift;
     float realZoomX;
     float realZoomY;
     
     Rect *realSrcRect;
     
     Quad quad;
+    SimpleQuadArray *perspectiveMesh;
     Transform trans;
     
     FloatRect srcRect;
@@ -134,9 +137,11 @@ struct SpritePrivate
     realOY(0),
     realX(0),
     xOffset(0),
+    perspectiveMode(0), perspectiveSlices(4), perspectiveAnchor(0), perspectiveGain(1), perspectiveLift(0),
     realZoomX(1.0f),
     realZoomY(1.0f),
     realSrcRect(&tmp.rect),
+    perspectiveMesh(0),
     mirrored(false),
     bushDepth(0),
     bushSlope(0),
@@ -173,6 +178,7 @@ struct SpritePrivate
     
     ~SpritePrivate()
     {
+        delete perspectiveMesh;
         srcRectCon.disconnect();
         prepareCon.disconnect();
         
@@ -440,6 +446,12 @@ struct SpritePrivate
         
         if (!opacity)
             return;
+
+        if (perspectiveMode != 0)
+        {
+            isVisible = true;
+            return;
+        }
         
         /* Compare sprite bounding box against the scene */
         
@@ -677,6 +689,11 @@ DEF_ATTR_RD_SIMPLE(Sprite, Angle,      float,   p->trans.getRotation())
 DEF_ATTR_RD_SIMPLE(Sprite, Taper,      float,   p->trans.getTaper())
 DEF_ATTR_RD_SIMPLE(Sprite, TaperCenter, float,  p->trans.getTaperCenter())
 DEF_ATTR_RD_SIMPLE(Sprite, XOffset,    float,   p->xOffset)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveMode, int, p->perspectiveMode)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveAnchor, float, p->perspectiveAnchor)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveGain, float, p->perspectiveGain)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveLift, float, p->perspectiveLift)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveSlices, int, p->perspectiveSlices)
 DEF_ATTR_RD_SIMPLE(Sprite, Mirror,     bool,    p->mirrored)
 DEF_ATTR_RD_SIMPLE(Sprite, BushDepth,  int,     p->bushDepth)
 DEF_ATTR_RD_SIMPLE(Sprite, BlendType,  int,     p->blendType)
@@ -757,6 +774,15 @@ void Sprite::setXOffset(float value)
     p->xOffset = value;
     p->trans.setPosition(Vec2(p->realX + value, getY()));
 }
+
+#define DEF_PERSPECTIVE_SETTER(Name, field, type) \
+void Sprite::setPerspective##Name(type value) { guardDisposed(); if (p->field == value) return; p->field = value; }
+DEF_PERSPECTIVE_SETTER(Mode, perspectiveMode, int)
+DEF_PERSPECTIVE_SETTER(Anchor, perspectiveAnchor, float)
+DEF_PERSPECTIVE_SETTER(Gain, perspectiveGain, float)
+DEF_PERSPECTIVE_SETTER(Lift, perspectiveLift, float)
+DEF_PERSPECTIVE_SETTER(Slices, perspectiveSlices, int)
+#undef DEF_PERSPECTIVE_SETTER
 
 void Sprite::setY(int value)
 {
@@ -1046,7 +1072,36 @@ void Sprite::draw()
         scalingMethod = shState->config().bitmapSmoothScaling;
     }
 
-    if (renderEffect)
+    const PerspectiveTable *perspective = p->viewport ? &p->viewport->perspectiveTable() : 0;
+    bool perspectiveEnabled = p->perspectiveMode != 0 && perspective && perspective->enabled;
+
+    if (perspectiveEnabled)
+    {
+        PerspectiveSpriteShader &shader = shState->shaders().perspectiveSprite();
+        shader.bind();
+        shader.applyViewportProj();
+        shader.setSpriteMat(p->trans.getMatrixWithoutTaper());
+        shader.setPerspective(*perspective, p->perspectiveMode,
+                              p->trans.getPosition().y + p->trans.getGlobalOffset().y + p->perspectiveAnchor,
+                              p->perspectiveGain, p->perspectiveLift);
+        shader.setTone(p->tone->norm);
+        shader.setColor((flashing && flashColor.w > p->color->norm.w) ? flashColor : p->color->norm);
+        shader.setOpacity(p->opacity.norm);
+        shader.setBushDepth(p->bushY, p->bushUnder, p->bushSlope, p->bushIntercept);
+        shader.setBushOpacity(p->bushOpacity.norm);
+        shader.setInvert(p->invert);
+        if (p->pattern && p->patternOpacity > 0 && !p->pattern->isDisposed()) {
+            shader.setPattern(p->pattern->getGLTypes().tex, Vec2(p->pattern->width(), p->pattern->height()));
+            shader.setPatternBlendType(p->patternBlendType);
+            shader.setPatternTile(p->patternTile);
+            shader.setPatternZoom(p->patternZoom);
+            shader.setPatternOpacity(p->patternOpacity.norm);
+            shader.setPatternScroll(p->patternScroll);
+            shader.setShouldRenderPattern(true);
+        } else shader.setShouldRenderPattern(false);
+        base = &shader;
+    }
+    else if (renderEffect)
     {
         if (scalingMethod != NearestNeighbor)
         {
@@ -1176,7 +1231,33 @@ void Sprite::draw()
     
     TEX::setSmooth(scalingMethod == Bilinear);
 
-    if (p->wave.active)
+    if (perspectiveEnabled && p->perspectiveMode == 1 && p->wave.active)
+    {
+        p->wave.qArray.draw();
+    }
+    else if (perspectiveEnabled && p->perspectiveMode == 1)
+    {
+        // ponytail: cap rows at the 64-sample table resolution; raise if measured curvature needs more subdivisions.
+        int slices = std::max(1, std::min(p->perspectiveSlices, 64));
+        if (!p->perspectiveMesh) p->perspectiveMesh = new SimpleQuadArray;
+        p->perspectiveMesh->resize(slices);
+        float w = p->adjustedSrcRect.w, h = p->adjustedSrcRect.h;
+        FloatRect tex = p->adjustedSrcRect;
+        if (p->bitmap->hasHires()) {
+            float sx = (float)p->bitmap->getHires()->width() / p->bitmap->width();
+            float sy = (float)p->bitmap->getHires()->height() / p->bitmap->height();
+            tex.x *= sx; tex.y *= sy; tex.w *= sx; tex.h *= sy;
+        }
+        if (p->mirrored) tex = tex.hFlipped();
+        for (int i = 0; i < slices; ++i) {
+            FloatRect pos(0, h * i / slices, w, h / slices);
+            FloatRect uv(tex.x, tex.y + tex.h * i / slices, tex.w, tex.h / slices);
+            Quad::setTexPosRect(&p->perspectiveMesh->vertices[i * 4], uv, pos);
+        }
+        p->perspectiveMesh->commit();
+        p->perspectiveMesh->draw();
+    }
+    else if (p->wave.active)
         p->wave.qArray.draw();
     else
         p->quad.draw();
