@@ -25,6 +25,7 @@
 #include "flashable-binding.h"
 #include "sceneelement-binding.h"
 #include "sharedstate.h"
+#include "shader.h"
 #include "viewport.h"
 #include <algorithm>
 #include <cmath>
