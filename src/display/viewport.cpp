@@ -30,6 +30,7 @@
 
 #include <SDL_rect.h>
 #include <cmath>
+#include <stdint.h>
 
 #include "sigslot/signal.hpp"
 
@@ -100,6 +101,8 @@ struct ViewportPrivate
 	}
 };
 
+static uint64_t nextPerspectiveTableId = 0;
+
 Viewport::Viewport(int x, int y, int width, int height)
     : SceneElement(*shState->screen()),
       sceneLink(this)
@@ -165,6 +168,7 @@ void Viewport::setPerspective(const PerspectiveSegment *segments, int segmentCou
 		m_perspective.samples[i] = Vec4(values[i * 3], values[i * 3 + 1], values[i * 3 + 2], 0);
 	m_perspective.enabled = true;
 	++m_perspective.generation;
+	m_perspective.identity = ++nextPerspectiveTableId;
 }
 
 void Viewport::clearPerspective()
@@ -174,6 +178,7 @@ void Viewport::clearPerspective()
 	m_perspective.segmentCount = 0;
 	m_perspective.centerX = p->rect->width / 2.0f;
 	++m_perspective.generation;
+	m_perspective.identity = ++nextPerspectiveTableId;
 }
 
 void Viewport::setPerspectiveCenterX(float value)

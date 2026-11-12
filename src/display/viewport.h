@@ -27,6 +27,7 @@
 #include "disposable.h"
 #include "util.h"
 #include <array>
+#include <stdint.h>
 
 static const int PERSPECTIVE_SAMPLES = 64;
 static const int PERSPECTIVE_MAX_SEGMENTS = 4;
@@ -45,8 +46,9 @@ struct PerspectiveTable
 	float centerX;
 	bool enabled;
 	unsigned int generation;
+	uint64_t identity;
 
-	PerspectiveTable() : segmentCount(0), centerX(0), enabled(false), generation(0)
+	PerspectiveTable() : segmentCount(0), centerX(0), enabled(false), generation(0), identity(0)
 	{
 		for (int i = 0; i < PERSPECTIVE_SAMPLES; ++i)
 			samples[i] = Vec4(0, 1, 1, 0);
@@ -58,6 +60,8 @@ struct ViewportPrivate;
 class Viewport : public Scene, public SceneElement, public Flashable, public Disposable
 {
 public:
+	using Disposable::guardDisposed;
+
 	Viewport(int x, int y, int width, int height);
 	Viewport(Rect *rect);
 	Viewport();

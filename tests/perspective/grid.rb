@@ -47,6 +47,34 @@ end
 	sprite.perspective_lift = column * 3
 end
 
+shifted_viewport = Viewport.new(40, 60, 300, 200)
+shifted_viewport.perspective_center_x = 150.0
+shifted_viewport.perspective_set(segments, table)
+3.times do |column|
+	bitmap = Bitmap.new(tile_width, tile_height)
+	bitmap.fill_rect(0, 0, tile_width, tile_height, colors[column])
+	sprite = Sprite.new(shifted_viewport)
+	sprite.bitmap = bitmap
+	sprite.x = 16 + column * 72
+	sprite.y = 48
+	sprite.perspective_mode = 1
+	sprite.perspective_slices = 3
+end
+
+offset_viewport = Viewport.new
+offset_viewport.oy = 30
+offset_viewport.perspective_set(segments, table)
+bitmap = Bitmap.new(32, 96)
+bitmap.fill_rect(0, 0, 32, 96, colors[3])
+sprite = Sprite.new(offset_viewport)
+sprite.bitmap = bitmap
+sprite.x = Graphics.width - 160
+sprite.y = Graphics.height / 2 + 40
+sprite.oy = 96
+sprite.perspective_mode = 2
+sprite.perspective_anchor = 0.0
+sprite.perspective_gain = 1.0
+
 loop do
 	Graphics.update
 	Input.update

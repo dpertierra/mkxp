@@ -656,28 +656,36 @@ PerspectiveSpriteShader::PerspectiveSpriteShader()
 {
 	INIT_SHADER(sprite25d, sprite, PerspectiveSpriteShader);
 	ShaderBase::init();
-	GET_U(spriteMat); GET_U(table); GET_U(segments); GET_U(segmentCount); GET_U(centerX);
+	GET_U(spriteMat);
+	u_table = gl.GetUniformLocation(program, "perspectiveTable");
+	u_segments = gl.GetUniformLocation(program, "perspectiveSegments");
+	GET_U(segmentCount); GET_U(centerX); GET_U(viewportOffset);
 	GET_U(perspectiveMode); GET_U(perspectiveAnchor); GET_U(perspectiveGain); GET_U(perspectiveLift);
 	GET_U(tone); GET_U(color); GET_U(opacity); GET_U(bushY); GET_U(bushUnder);
 	GET_U(bushSlope); GET_U(bushIntercept); GET_U(bushOpacity); GET_U(pattern);
 	GET_U(patternBlendType); GET_U(patternTile); GET_U(renderPattern); GET_U(patternSizeInv);
 	GET_U(patternOpacity); GET_U(patternScroll); GET_U(patternZoom); GET_U(invert);
+	lastTableIdentity = 0;
 }
 
 void PerspectiveSpriteShader::setSpriteMat(const float value[16]) { gl.UniformMatrix4fv(u_spriteMat, 1, GL_FALSE, value); }
-void PerspectiveSpriteShader::setPerspective(const PerspectiveTable &t, int mode, float anchor, float gain, float lift)
+void PerspectiveSpriteShader::setPerspective(const PerspectiveTable &t, int mode, float anchor, float gain, float lift, const Vec2 &viewportOffset)
 {
-	gl.Uniform4fv(u_table, PERSPECTIVE_SAMPLES, &t.samples[0].x);
-	float segments[PERSPECTIVE_MAX_SEGMENTS * 4] = { 0 };
-	for (int i = 0; i < t.segmentCount; ++i) {
-		segments[i * 4] = t.segments[i].yStart;
-		segments[i * 4 + 1] = t.segments[i].yStep;
-		segments[i * 4 + 2] = (float)t.segments[i].firstIndex;
-		segments[i * 4 + 3] = (float)t.segments[i].count;
+	if (lastTableIdentity != t.identity) {
+		gl.Uniform4fv(u_table, PERSPECTIVE_SAMPLES, &t.samples[0].x);
+		float segments[PERSPECTIVE_MAX_SEGMENTS * 4] = { 0 };
+		for (int i = 0; i < t.segmentCount; ++i) {
+			segments[i * 4] = t.segments[i].yStart;
+			segments[i * 4 + 1] = t.segments[i].yStep;
+			segments[i * 4 + 2] = (float)t.segments[i].firstIndex;
+			segments[i * 4 + 3] = (float)t.segments[i].count;
+		}
+		gl.Uniform4fv(u_segments, PERSPECTIVE_MAX_SEGMENTS, segments);
+		gl.Uniform1i(u_segmentCount, t.segmentCount);
+		lastTableIdentity = t.identity;
 	}
-	gl.Uniform4fv(u_segments, PERSPECTIVE_MAX_SEGMENTS, segments);
-	gl.Uniform1i(u_segmentCount, t.segmentCount);
-	gl.Uniform1f(u_centerX, t.centerX); gl.Uniform1i(u_perspectiveMode, mode);
+	gl.Uniform1f(u_centerX, t.centerX); setVec2Uniform(u_viewportOffset, viewportOffset);
+	gl.Uniform1i(u_perspectiveMode, mode);
 	gl.Uniform1f(u_perspectiveAnchor, anchor); gl.Uniform1f(u_perspectiveGain, gain); gl.Uniform1f(u_perspectiveLift, lift);
 }
 void PerspectiveSpriteShader::setTone(const Vec4 &v) { setVec4Uniform(u_tone, v); }
@@ -696,13 +704,26 @@ void PerspectiveSpriteShader::setPatternScroll(const Vec2 &v) { setVec2Uniform(u
 void PerspectiveSpriteShader::setPatternZoom(const Vec2 &v) { setVec2Uniform(u_patternZoom, v); }
 void PerspectiveSpriteShader::setInvert(bool v) { gl.Uniform1i(u_invert, v); }
 
-ShaderSet::ShaderSet() : perspectiveSpriteShader(0) {}
+ShaderSet::ShaderSet() : perspectiveSpriteShader(0), perspectiveUnavailable(false) {}
 ShaderSet::~ShaderSet() { delete perspectiveSpriteShader; }
-PerspectiveSpriteShader &ShaderSet::perspectiveSprite()
+PerspectiveSpriteShader *ShaderSet::perspectiveSprite()
 {
-	if (!perspectiveSpriteShader) perspectiveSpriteShader = new PerspectiveSpriteShader;
-	return *perspectiveSpriteShader;
+	if (perspectiveUnavailable) return 0;
+	if (!perspectiveSpriteShader) {
+		try {
+			perspectiveSpriteShader = new PerspectiveSpriteShader;
+		} catch (const Exception &e) {
+			std::clog << "2.5D perspective shader unavailable: " << e.msg << std::endl;
+			perspectiveUnavailable = true;
+		} catch (...) {
+			std::clog << "2.5D perspective shader unavailable" << std::endl;
+			perspectiveUnavailable = true;
+		}
+	}
+	return perspectiveSpriteShader;
 }
+
+bool ShaderSet::perspectiveSpriteAvailable() const { return !perspectiveUnavailable; }
 
 
 PlaneShader::PlaneShader()

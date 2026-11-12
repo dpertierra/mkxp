@@ -84,6 +84,8 @@ DEF_GFX_PROP_I(Viewport, OY)
 RB_METHOD_GUARD(viewportPerspectiveSet) {
     VALUE segmentsObj, tableObj;
     rb_get_args(argc, argv, "oo", &segmentsObj, &tableObj RB_ARG_END);
+    Viewport *v = getPrivateData<Viewport>(self);
+    v->guardDisposed();
     if (!RB_TYPE_P(segmentsObj, RUBY_T_ARRAY) || RARRAY_LEN(segmentsObj) < 1 ||
         RARRAY_LEN(segmentsObj) > PERSPECTIVE_MAX_SEGMENTS)
         rb_raise(rb_eArgError, "perspective segments must contain 1 to 4 entries");
@@ -129,7 +131,6 @@ RB_METHOD_GUARD(viewportPerspectiveSet) {
             rb_raise(rb_eArgError, "perspective table values must be finite floats");
         values[i] = (float)value;
     }
-    Viewport *v = getPrivateData<Viewport>(self);
     GFX_LOCK;
     v->setPerspective(segments, (int)RARRAY_LEN(segmentsObj), values);
     GFX_UNLOCK;
@@ -139,6 +140,7 @@ RB_METHOD_GUARD(viewportPerspectiveSet) {
 RB_METHOD_GUARD(viewportPerspectiveClear) {
     RB_UNUSED_PARAM;
     Viewport *v = getPrivateData<Viewport>(self);
+    v->guardDisposed();
     GFX_LOCK; v->clearPerspective(); GFX_UNLOCK;
     return Qnil;
 } RB_METHOD_GUARD_END
@@ -146,18 +148,23 @@ RB_METHOD_GUARD(viewportPerspectiveClear) {
 RB_METHOD_GUARD(viewportPerspectiveQ) {
     RB_UNUSED_PARAM;
     Viewport *v = getPrivateData<Viewport>(self);
-    return v->perspectiveTable().enabled ? Qtrue : Qfalse;
+    v->guardDisposed();
+    GFX_LOCK;
+    bool enabled = v->perspectiveTable().enabled && shState->shaders().perspectiveSpriteAvailable();
+    GFX_UNLOCK;
+    return enabled ? Qtrue : Qfalse;
 } RB_METHOD_GUARD_END
 
 RB_METHOD_GUARD(viewportPerspectiveCenterXSet) {
     VALUE valueObj;
     rb_get_args(argc, argv, "o", &valueObj RB_ARG_END);
+    Viewport *v = getPrivateData<Viewport>(self);
+    v->guardDisposed();
     if (!(RB_TYPE_P(valueObj, RUBY_T_FLOAT) || RB_INTEGER_TYPE_P(valueObj)))
         rb_raise(rb_eTypeError, "perspective_center_x must be numeric");
     double value = NUM2DBL(valueObj);
     if (!std::isfinite(value) || !std::isfinite((float)value))
         rb_raise(rb_eArgError, "perspective_center_x must be finite");
-    Viewport *v = getPrivateData<Viewport>(self);
     GFX_LOCK; v->setPerspectiveCenterX((float)value); GFX_UNLOCK;
     return valueObj;
 } RB_METHOD_GUARD_END

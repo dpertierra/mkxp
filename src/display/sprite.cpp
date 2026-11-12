@@ -35,9 +35,11 @@
 #include "shader.h"
 #include "glstate.h"
 #include "quadarray.h"
+#include "exception.h"
 
 // TODO: Replace M_PI with std::numbers::pi once we upgrade to C++20.
 #include <math.h>
+#include <cmath>
 #ifndef M_PI
 # define M_PI 3.14159265358979323846
 #endif
@@ -67,6 +69,9 @@ struct SpritePrivate
     float xOffset;
     int perspectiveMode, perspectiveSlices;
     float perspectiveAnchor, perspectiveGain, perspectiveLift;
+    bool perspectiveMeshDirty;
+    Bitmap *perspectiveMeshBitmap;
+    Bitmap *perspectiveMeshHires;
     float realZoomX;
     float realZoomY;
     
@@ -138,6 +143,7 @@ struct SpritePrivate
     realX(0),
     xOffset(0),
     perspectiveMode(0), perspectiveSlices(4), perspectiveAnchor(0), perspectiveGain(1), perspectiveLift(0),
+    perspectiveMeshDirty(true), perspectiveMeshBitmap(0), perspectiveMeshHires(0),
     realZoomX(1.0f),
     realZoomY(1.0f),
     realSrcRect(&tmp.rect),
@@ -360,6 +366,7 @@ struct SpritePrivate
     
     void onSrcRectChange()
     {
+        perspectiveMeshDirty = true;
         if (bitmap == realBitmap)
             srcRect = realSrcRect->toFloatRect();
         
@@ -775,14 +782,46 @@ void Sprite::setXOffset(float value)
     p->trans.setPosition(Vec2(p->realX + value, getY()));
 }
 
-#define DEF_PERSPECTIVE_SETTER(Name, field, type) \
-void Sprite::setPerspective##Name(type value) { guardDisposed(); if (p->field == value) return; p->field = value; }
-DEF_PERSPECTIVE_SETTER(Mode, perspectiveMode, int)
-DEF_PERSPECTIVE_SETTER(Anchor, perspectiveAnchor, float)
-DEF_PERSPECTIVE_SETTER(Gain, perspectiveGain, float)
-DEF_PERSPECTIVE_SETTER(Lift, perspectiveLift, float)
-DEF_PERSPECTIVE_SETTER(Slices, perspectiveSlices, int)
-#undef DEF_PERSPECTIVE_SETTER
+void Sprite::setPerspectiveMode(int value)
+{
+    guardDisposed();
+    if (value < 0 || value > 2)
+        throw Exception(Exception::RGSSError, "perspective_mode must be 0, 1 or 2");
+    if (p->perspectiveMode == value) return;
+    p->perspectiveMode = value;
+}
+
+void Sprite::setPerspectiveAnchor(float value)
+{
+    guardDisposed();
+    if (!std::isfinite(value)) throw Exception(Exception::RGSSError, "perspective_anchor must be finite");
+    if (p->perspectiveAnchor == value) return;
+    p->perspectiveAnchor = value;
+}
+
+void Sprite::setPerspectiveGain(float value)
+{
+    guardDisposed();
+    if (!std::isfinite(value)) throw Exception(Exception::RGSSError, "perspective_gain must be finite");
+    if (p->perspectiveGain == value) return;
+    p->perspectiveGain = value;
+}
+
+void Sprite::setPerspectiveLift(float value)
+{
+    guardDisposed();
+    if (!std::isfinite(value)) throw Exception(Exception::RGSSError, "perspective_lift must be finite");
+    if (p->perspectiveLift == value) return;
+    p->perspectiveLift = value;
+}
+
+void Sprite::setPerspectiveSlices(int value)
+{
+    guardDisposed();
+    if (p->perspectiveSlices == value) return;
+    p->perspectiveSlices = value;
+    p->perspectiveMeshDirty = true;
+}
 
 void Sprite::setY(int value)
 {
@@ -1074,16 +1113,20 @@ void Sprite::draw()
 
     const PerspectiveTable *perspective = p->viewport ? &p->viewport->perspectiveTable() : 0;
     bool perspectiveEnabled = p->perspectiveMode != 0 && perspective && perspective->enabled;
+    PerspectiveSpriteShader *perspectiveShader = perspectiveEnabled ? shState->shaders().perspectiveSprite() : 0;
+    perspectiveEnabled = perspectiveEnabled && perspectiveShader;
 
     if (perspectiveEnabled)
     {
-        PerspectiveSpriteShader &shader = shState->shaders().perspectiveSprite();
+        scalingMethod = NearestNeighbor;
+        PerspectiveSpriteShader &shader = *perspectiveShader;
         shader.bind();
         shader.applyViewportProj();
         shader.setSpriteMat(p->trans.getMatrixWithoutTaper());
         shader.setPerspective(*perspective, p->perspectiveMode,
-                              p->trans.getPosition().y + p->trans.getGlobalOffset().y + p->perspectiveAnchor,
-                              p->perspectiveGain, p->perspectiveLift);
+                              p->trans.getPosition().y + p->perspectiveAnchor,
+                              p->perspectiveGain, p->perspectiveLift,
+                              Vec2(p->trans.getGlobalOffset().x, p->trans.getGlobalOffset().y));
         shader.setTone(p->tone->norm);
         shader.setColor((flashing && flashColor.w > p->color->norm.w) ? flashColor : p->color->norm);
         shader.setOpacity(p->opacity.norm);
@@ -1240,21 +1283,31 @@ void Sprite::draw()
         // ponytail: cap rows at the 64-sample table resolution; raise if measured curvature needs more subdivisions.
         int slices = std::max(1, std::min(p->perspectiveSlices, 64));
         if (!p->perspectiveMesh) p->perspectiveMesh = new SimpleQuadArray;
-        p->perspectiveMesh->resize(slices);
-        float w = p->adjustedSrcRect.w, h = p->adjustedSrcRect.h;
-        FloatRect tex = p->adjustedSrcRect;
-        if (p->bitmap->hasHires()) {
-            float sx = (float)p->bitmap->getHires()->width() / p->bitmap->width();
-            float sy = (float)p->bitmap->getHires()->height() / p->bitmap->height();
-            tex.x *= sx; tex.y *= sy; tex.w *= sx; tex.h *= sy;
+        Bitmap *hires = p->bitmap->hasHires() ? p->bitmap->getHires() : 0;
+        if (p->perspectiveMeshDirty || p->perspectiveMeshBitmap != p->bitmap || p->perspectiveMeshHires != hires) {
+            p->perspectiveMesh->resize(slices);
+            float w = p->adjustedSrcRect.w, h = p->adjustedSrcRect.h;
+            FloatRect tex = p->adjustedSrcRect;
+            if (hires) {
+                float sx = (float)hires->width() / p->bitmap->width();
+                float sy = (float)hires->height() / p->bitmap->height();
+                tex.x *= sx; tex.y *= sy; tex.w *= sx; tex.h *= sy;
+            }
+            if (p->mirrored) tex = tex.hFlipped();
+            for (int i = 0; i < slices; ++i) {
+                float y0 = h * i / slices;
+                float y1 = (i + 1 == slices) ? h : h * (i + 1) / slices;
+                float uvY0 = tex.y + tex.h * i / slices;
+                float uvY1 = (i + 1 == slices) ? tex.y + tex.h : tex.y + tex.h * (i + 1) / slices;
+                FloatRect pos(0, y0, w, y1 - y0);
+                FloatRect uv(tex.x, uvY0, tex.w, uvY1 - uvY0);
+                Quad::setTexPosRect(&p->perspectiveMesh->vertices[i * 4], uv, pos);
+            }
+            p->perspectiveMesh->commit();
+            p->perspectiveMeshBitmap = p->bitmap;
+            p->perspectiveMeshHires = hires;
+            p->perspectiveMeshDirty = false;
         }
-        if (p->mirrored) tex = tex.hFlipped();
-        for (int i = 0; i < slices; ++i) {
-            FloatRect pos(0, h * i / slices, w, h / slices);
-            FloatRect uv(tex.x, tex.y + tex.h * i / slices, tex.w, tex.h / slices);
-            Quad::setTexPosRect(&p->perspectiveMesh->vertices[i * 4], uv, pos);
-        }
-        p->perspectiveMesh->commit();
         p->perspectiveMesh->draw();
     }
     else if (p->wave.active)
