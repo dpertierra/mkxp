@@ -61,6 +61,10 @@ struct SpritePrivate
     
     int realOX;
     int realOY;
+    /* Integer x as set from Ruby, plus a fractional nudge (x_offset) that only
+     * reaches the transform. Kept apart so #x still reads back what was set. */
+    int realX;
+    float xOffset;
     float realZoomX;
     float realZoomY;
     
@@ -128,6 +132,8 @@ struct SpritePrivate
     realBitmap(0),
     realOX(0),
     realOY(0),
+    realX(0),
+    xOffset(0),
     realZoomX(1.0f),
     realZoomY(1.0f),
     realSrcRect(&tmp.rect),
@@ -661,7 +667,7 @@ Sprite::~Sprite()
 }
 
 DEF_ATTR_RD_SIMPLE(Sprite, Bitmap,     Bitmap*, p->realBitmap)
-DEF_ATTR_RD_SIMPLE(Sprite, X,          int,     p->trans.getPosition().x)
+DEF_ATTR_RD_SIMPLE(Sprite, X,          int,     p->realX)
 DEF_ATTR_RD_SIMPLE(Sprite, Y,          int,     p->trans.getPosition().y)
 DEF_ATTR_RD_SIMPLE(Sprite, OX,         int,     p->realOX)
 DEF_ATTR_RD_SIMPLE(Sprite, OY,         int,     p->realOY)
@@ -669,6 +675,8 @@ DEF_ATTR_RD_SIMPLE(Sprite, ZoomX,      float,   p->realZoomX)
 DEF_ATTR_RD_SIMPLE(Sprite, ZoomY,      float,   p->realZoomY)
 DEF_ATTR_RD_SIMPLE(Sprite, Angle,      float,   p->trans.getRotation())
 DEF_ATTR_RD_SIMPLE(Sprite, Taper,      float,   p->trans.getTaper())
+DEF_ATTR_RD_SIMPLE(Sprite, TaperCenter, float,  p->trans.getTaperCenter())
+DEF_ATTR_RD_SIMPLE(Sprite, XOffset,    float,   p->xOffset)
 DEF_ATTR_RD_SIMPLE(Sprite, Mirror,     bool,    p->mirrored)
 DEF_ATTR_RD_SIMPLE(Sprite, BushDepth,  int,     p->bushDepth)
 DEF_ATTR_RD_SIMPLE(Sprite, BlendType,  int,     p->blendType)
@@ -732,10 +740,22 @@ void Sprite::setX(int value)
 {
     guardDisposed();
     
-    if (p->trans.getPosition().x == value)
+    if (p->realX == value)
         return;
     
-    p->trans.setPosition(Vec2(value, getY()));
+    p->realX = value;
+    p->trans.setPosition(Vec2(value + p->xOffset, getY()));
+}
+
+void Sprite::setXOffset(float value)
+{
+    guardDisposed();
+
+    if (p->xOffset == value)
+        return;
+
+    p->xOffset = value;
+    p->trans.setPosition(Vec2(p->realX + value, getY()));
 }
 
 void Sprite::setY(int value)
@@ -745,7 +765,7 @@ void Sprite::setY(int value)
     if (p->trans.getPosition().y == value)
         return;
     
-    p->trans.setPosition(Vec2(getX(), value));
+    p->trans.setPosition(Vec2(p->trans.getPosition().x, value));
     
     if (p->wave.active)
         p->wave.dirty = true;
@@ -830,6 +850,17 @@ void Sprite::setTaper(float value)
         return;
 
     p->trans.setTaper(value);
+}
+
+void Sprite::setTaperCenter(float value)
+{
+    guardDisposed();
+
+    float cur = p->trans.getTaperCenter();
+    if (cur == value || (std::isnan(cur) && std::isnan(value)))
+        return;
+
+    p->trans.setTaperCenter(value);
 }
 
 void Sprite::setMirror(bool mirrored)

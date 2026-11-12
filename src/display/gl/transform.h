@@ -51,6 +51,7 @@
 
 // TODO: Replace M_PI with std::numbers::pi once we upgrade to C++20.
 #include <math.h>
+#include <cmath>
 #ifndef M_PI
 # define M_PI 3.14159265358979323846
 #endif
@@ -69,6 +70,7 @@ public:
 	    : scale(1, 1),
 	      rotation(0),
 	      taper(1),
+	      taperCenter(NAN),
 	      localSize(0, 0),
 	      dirty(true)
 	{
@@ -84,6 +86,7 @@ public:
 	Vec2 &getScale()    { return scale;    }
 	float getRotation() { return rotation; }
 	float getTaper()    { return taper;    }
+	float getTaperCenter() { return taperCenter; }
 	Vec2i &getGlobalOffset()  { return offset;   }
 
 	Vec2i getPositionI() const
@@ -146,6 +149,19 @@ public:
 
 		taper = value;
 		dirty = true;
+	}
+
+	/* Viewport-local x the taper narrows towards. NaN = the quad's own centre
+	 * line (the default). Sprites that share an
+	 * edge and a taper meet exactly on that edge only when they narrow towards
+	 * one common point; narrowing each about its own centre leaves a thin
+	 * wedge between neighbours. */
+	void setTaperCenter(float value)
+	{
+		taperCenter = value;
+
+		if (taper != 1)
+			dirty = true;
 	}
 
 	/* Untransformed size of the quad this matrix is applied to. Needed because
@@ -216,7 +232,9 @@ private:
 
 	/* Turns the affine matrix built above into a projective one that draws the
 	 * quad as a trapezoid: same bottom edge, top edge `taper` times as wide,
-	 * narrowing about the quad's vertical centre line.
+	 * narrowing towards the vertical line x = vx (taperCenter, or the quad's
+	 * own centre line when unset). Every bottom point x maps to
+	 * vx + (x - vx) * taper on the top edge.
 	 *
 	 * The vertex shader computes gl_Position = projMat * spriteMat * vec4(u, v, 0, 1),
 	 * and projMat (orthographic) leaves the bottom row alone, so
@@ -237,14 +255,18 @@ private:
 	{
 		float wl = localSize.x * scale.x;   /* on-screen width  */
 		float hl = localSize.y;             /* untransformed height (the v range) */
-		float cx = tx + (wl / 2);           /* centre line to taper about */
+		/* Line to taper towards, in the same space as tx. */
+		bool useOwnCenter = std::isnan(taperCenter);
+		float cx = tx + (wl / 2);
+		float vx = useOwnCenter ? cx : taperCenter + offset.x;
 		float yb = ty + (localSize.y * scale.y);   /* bottom edge, untapered */
 
 		float m7 = (taper - 1) / hl;
 
 		matrix[0]  = scale.x * taper;
-		matrix[4]  = m7 * cx;
-		matrix[12] = cx - ((wl / 2) * taper);
+		matrix[4]  = m7 * vx;
+		matrix[12] = useOwnCenter ? cx - ((wl / 2) * taper)
+		                         : (tx * taper) + (vx * (1 - taper));
 
 		matrix[1]  = 0;
 		matrix[5]  = ((yb * taper) - ty) / hl;
@@ -260,6 +282,7 @@ private:
 	Vec2 scale;
 	float rotation;
 	float taper;
+	float taperCenter;
 	Vec2 localSize;
 
 	/* Silently added to position */
