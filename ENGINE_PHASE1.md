@@ -2,6 +2,15 @@
 
 ## Implemented
 
+### Phase 5
+
+- Added `Sprite#perspective_shift_top` and `Sprite#perspective_shift_bottom`, both finite Float properties defaulting to `0.0` with no-op setter guards.
+- In floor mode only, nonzero shifts offset each local vertex Y by the linear interpolation of the top and bottom values before sampling the perspective table. The normalized vertical coordinate comes from the floor mesh position and sprite height; both-zero shifts bypass the added calculation.
+- The values are per-sprite uniforms, uploaded alongside the other sprite settings and kept outside the perspective-table generation cache.
+- Added a four-tile vertical ramp to `tests/perspective/grid.rb`. Adjacent edges share matching shift values (0, 8, and 16 pixels), with flat tiles at each end, to expose seams.
+
+**Phase 5 limits:** the ramp is a visual engine test and still needs runtime inspection for seams and expected lift direction. Shifts do not affect standing mode.
+
 - Added `Viewport#perspective_set(segments, table)`, `perspective_clear`, `perspective?`, and `perspective_center_x=`. Each segment is `[y_start, y_step, count]`; the binding validates 1–4 Float segments, positive finite steps, approximate contiguity, counts totaling 64, and 192 finite Float table values. The native viewport keeps a value-only table and increments its generation on changes.
 - Added the five Sprite perspective properties with no-op guards and defaults from the plan.
 - Added a lazy 2.5D sprite shader. It samples up to four uniform segments, interpolates/extrapolates the 64 F/W/U samples, applies mode 1 floor projection and mode 2 standing projection, and reuses `sprite.frag` for tone, color, opacity, flash, bush, pattern and invert effects.

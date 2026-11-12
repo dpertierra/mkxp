@@ -63,6 +63,8 @@ public:
 	DECL_ATTR( PerspectiveGain, float )
 	DECL_ATTR( PerspectiveLift, float )
 	DECL_ATTR( PerspectiveSlices, int )
+	DECL_ATTR( PerspectiveShiftTop, float )
+	DECL_ATTR( PerspectiveShiftBottom, float )
 	DECL_ATTR( Mirror,      bool    )
 	DECL_ATTR( BushDepth,   int     )
 	DECL_ATTR( BushOpacity, int     )

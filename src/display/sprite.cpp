@@ -69,6 +69,7 @@ struct SpritePrivate
     float xOffset;
     int perspectiveMode, perspectiveSlices;
     float perspectiveAnchor, perspectiveGain, perspectiveLift;
+    float perspectiveShiftTop, perspectiveShiftBottom;
     bool perspectiveMeshDirty;
     Bitmap *perspectiveMeshBitmap;
     Bitmap *perspectiveMeshHires;
@@ -143,6 +144,7 @@ struct SpritePrivate
     realX(0),
     xOffset(0),
     perspectiveMode(0), perspectiveSlices(4), perspectiveAnchor(0), perspectiveGain(1), perspectiveLift(0),
+    perspectiveShiftTop(0), perspectiveShiftBottom(0),
     perspectiveMeshDirty(true), perspectiveMeshBitmap(0), perspectiveMeshHires(0),
     realZoomX(1.0f),
     realZoomY(1.0f),
@@ -701,6 +703,8 @@ DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveAnchor, float, p->perspectiveAnchor)
 DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveGain, float, p->perspectiveGain)
 DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveLift, float, p->perspectiveLift)
 DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveSlices, int, p->perspectiveSlices)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveShiftTop, float, p->perspectiveShiftTop)
+DEF_ATTR_RD_SIMPLE(Sprite, PerspectiveShiftBottom, float, p->perspectiveShiftBottom)
 DEF_ATTR_RD_SIMPLE(Sprite, Mirror,     bool,    p->mirrored)
 DEF_ATTR_RD_SIMPLE(Sprite, BushDepth,  int,     p->bushDepth)
 DEF_ATTR_RD_SIMPLE(Sprite, BlendType,  int,     p->blendType)
@@ -821,6 +825,22 @@ void Sprite::setPerspectiveSlices(int value)
     if (p->perspectiveSlices == value) return;
     p->perspectiveSlices = value;
     p->perspectiveMeshDirty = true;
+}
+
+void Sprite::setPerspectiveShiftTop(float value)
+{
+    guardDisposed();
+    if (!std::isfinite(value)) throw Exception(Exception::RGSSError, "perspective_shift_top must be finite");
+    if (p->perspectiveShiftTop == value) return;
+    p->perspectiveShiftTop = value;
+}
+
+void Sprite::setPerspectiveShiftBottom(float value)
+{
+    guardDisposed();
+    if (!std::isfinite(value)) throw Exception(Exception::RGSSError, "perspective_shift_bottom must be finite");
+    if (p->perspectiveShiftBottom == value) return;
+    p->perspectiveShiftBottom = value;
 }
 
 void Sprite::setY(int value)
@@ -1126,6 +1146,10 @@ void Sprite::draw()
         shader.setPerspective(*perspective, p->perspectiveMode,
                               p->trans.getPosition().y + p->perspectiveAnchor,
                               p->perspectiveGain, p->perspectiveLift,
+                              (p->wave.active && p->wave.amp > 0 && p->trans.getScale().y != 0.0f)
+                                  ? p->adjustedSrcRect.h / p->trans.getScale().y
+                                  : p->adjustedSrcRect.h,
+                              p->perspectiveShiftTop, p->perspectiveShiftBottom,
                               Vec2(p->trans.getGlobalOffset().x, p->trans.getGlobalOffset().y));
         shader.setTone(p->tone->norm);
         shader.setColor((flashing && flashColor.w > p->color->norm.w) ? flashColor : p->color->norm);

@@ -75,6 +75,24 @@ sprite.perspective_mode = 2
 sprite.perspective_anchor = 0.0
 sprite.perspective_gain = 1.0
 
+# Matching edge shifts keep this vertical ramp continuous with the flat tiles.
+ramp_x = Graphics.width - tile_width - 8
+ramp_y = 16
+[ [0.0, 0.0], [0.0, 8.0], [8.0, 16.0], [16.0, 16.0] ].each_with_index do |shifts, i|
+	bitmap = Bitmap.new(tile_width, tile_height)
+	bitmap.fill_rect(0, 0, tile_width, tile_height, colors[i % colors.length])
+	bitmap.fill_rect(0, 0, tile_width, 2, Color.new(25, 25, 25))
+	bitmap.fill_rect(0, 0, 2, tile_height, Color.new(25, 25, 25))
+	sprite = Sprite.new(viewport)
+	sprite.bitmap = bitmap
+	sprite.x = ramp_x
+	sprite.y = ramp_y + i * tile_height
+	sprite.perspective_mode = 1
+	sprite.perspective_slices = 8
+	sprite.perspective_shift_top = shifts[0]
+	sprite.perspective_shift_bottom = shifts[1]
+end
+
 loop do
 	Graphics.update
 	Input.update

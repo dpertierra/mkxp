@@ -14,6 +14,9 @@ uniform int perspectiveMode;
 uniform float perspectiveAnchor;
 uniform float perspectiveGain;
 uniform float perspectiveLift;
+uniform float spriteHeight;
+uniform float perspectiveShiftTop;
+uniform float perspectiveShiftBottom;
 uniform vec2 viewportOffset;
 
 attribute vec2 position;
@@ -47,7 +50,12 @@ void main() {
     vec4 point = spriteMat * vec4(position, 0.0, 1.0);
     point.xy -= viewportOffset;
     if (perspectiveMode == 1) {
-        vec4 p = samplePerspective(point.y);
+        float y = point.y;
+        if (perspectiveShiftTop != 0.0 || perspectiveShiftBottom != 0.0) {
+            float v = spriteHeight > 0.0 ? clamp(position.y / spriteHeight, 0.0, 1.0) : 0.0;
+            y -= mix(perspectiveShiftTop, perspectiveShiftBottom, v);
+        }
+        vec4 p = samplePerspective(y);
         point.x = centerX + (point.x - centerX) * p.y;
         point.y = p.x;
     } else if (perspectiveMode == 2) {
