@@ -57,6 +57,7 @@ public:
 	DECL_ATTR( Angle,       float   )
 	DECL_ATTR( Taper,       float   )
 	DECL_ATTR( TaperCenter, float   )
+	DECL_ATTR( XOffset,     float   )
 	DECL_ATTR( Mirror,      bool    )
 	DECL_ATTR( BushDepth,   int     )
 	DECL_ATTR( BushOpacity, int     )
