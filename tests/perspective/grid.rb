@@ -1,4 +1,4 @@
-viewport = Viewport.new
+viewport = Viewport.new(0, 0, Graphics.width, Graphics.height)
 segments = [[-240.0, 8.0, 16], [-112.0, 10.0, 16], [48.0, 12.0, 16], [240.0, 14.0, 16]]
 table = []
 segments.each do |y_start, y_step, count|
@@ -61,7 +61,7 @@ shifted_viewport.perspective_set(segments, table)
 	sprite.perspective_slices = 3
 end
 
-offset_viewport = Viewport.new
+offset_viewport = Viewport.new(0, 0, Graphics.width, Graphics.height)
 offset_viewport.oy = 30
 offset_viewport.perspective_set(segments, table)
 bitmap = Bitmap.new(32, 96)
