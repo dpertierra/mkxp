@@ -29,13 +29,14 @@ Validación: un oráculo Ruby (fase 0) mide el error de interpolar 64 muestras f
 ### Viewport
 
 ```ruby
-viewport.perspective_set(y_start, y_step, table)  # table: Array de 64*3 Float [F0,W0,U0, F1,W1,U1, ...]
+viewport.perspective_set(segments, table)  # segments: 1..4 × [y_start, y_step, count] (Σcount = 64); table: 64*3 Float [F0,W0,U0, ...]
 viewport.perspective_center_x = 256               # cx de project_x (por defecto rect.width / 2)
 viewport.perspective_clear                        # vuelve al estado sin perspectiva
 viewport.perspective?                             # => true/false
 ```
 
-- Fuera de `[y_start, y_start + 63*y_step]` se extrapola con la pendiente del extremo (la rejilla ampliada tiene filas por encima y por debajo de la pantalla).
+- Fase 0 (`tests/perspective/ORACLE_RESULT.md`): con reparto uniforme el error llega a 0,8 px por el quiebre de pendiente en `y = 0`; con 64 muestras en hasta 4 tramos uniformes (cortes en los quiebres de F/W) baja a 0,068 px. De ahí los tramos.
+- Fuera del rango total se extrapola con la pendiente del extremo (la rejilla ampliada tiene filas por encima y por debajo de la pantalla).
 - El setter valida tipos, longitud y finitud antes de tocar el estado. No guarda `VALUE` de Ruby.
 
 ### Sprite
