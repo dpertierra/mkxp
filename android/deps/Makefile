@@ -54,6 +54,7 @@ CLONE := $(GIT) clone -q
 GITHUB := https://github.com
 
 CONFIGURE_ENV := \
+	CMAKE_POLICY_VERSION_MINIMUM=3.10 \
 	PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) \
 	CC="$(CC)" CXX="$(CXX)" AR="$(AR)" RANLIB="$(RANLIB)" \
 	CFLAGS="$(CFLAGS)" CXXFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
@@ -213,6 +214,11 @@ $(DOWNLOADS)/physfs/CMakeLists.txt:
 sdl2: init_dirs check-toolchain $(LIBDIR)/libSDL2.so
 
 $(LIBDIR)/libSDL2.so: $(DOWNLOADS)/sdl2/cmakebuild/Makefile
+	@# NDK r30 removed ALooper_pollAll(); upstream SDL (2.30.10+) calls pollOnce here.
+	@if grep -q ALooper_pollAll $(DOWNLOADS)/sdl2/src/sensor/android/SDL_androidsensor.c; then \
+	  sed -i 's/ALooper_pollAll/ALooper_pollOnce/g' \
+	    $(DOWNLOADS)/sdl2/src/sensor/android/SDL_androidsensor.c; \
+	  echo "patched SDL_androidsensor.c: ALooper_pollAll -> ALooper_pollOnce"; fi
 	cd $(DOWNLOADS)/sdl2/cmakebuild; \
 	make -j$(NPROC); make install
 
