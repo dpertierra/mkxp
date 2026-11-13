@@ -35,7 +35,7 @@ global_args += '-DHAVE_NANOSLEEP'
 
 steamworks = false
 steamworks_path = get_option('steamworks_path')
-if steamworks_path != ''
+if steamworks_path != '' and host_system != 'android'
     libname = 'steam_api'
     if host_system == 'linux'
         if sizeof['void*'] == 4
@@ -65,6 +65,9 @@ endif
 
 # GLES
 gfx_backend = get_option('gfx_backend')
+if host_system == 'android'
+    gfx_backend = 'gles'
+endif
 if gfx_backend == 'gles'
     # Needs to be manually set up for now
     global_args += '-DGLES2_HEADER'
@@ -90,13 +93,16 @@ endif
 
 # Decide whether or not to use MiniFFI
 miniffi = get_option('use_miniffi')
+if host_system == 'android'
+    miniffi = false
+endif
 if miniffi == true
     miniffi = true
     global_args += '-DMKXPZ_MINIFFI'
 endif
 
 # Defines
-if get_option('workdir_current')
+if get_option('workdir_current') or host_system == 'android'
     global_args += '-DWORKDIR_CURRENT'
 endif
 
@@ -129,7 +135,7 @@ if host_system == 'windows'
     subdir('windows')
     global_sources += windows_resources
     global_include_dirs += include_directories('windows')
-else
+elif host_system != 'android'
     subdir('linux')
     rpath = '$ORIGIN/lib'
     if get_option('appimage') != true
@@ -183,15 +189,26 @@ if steamworks == true
         install: (host_system != 'windows'))
 endif
 
-executable(exe_name,
-    sources: global_sources,
-    dependencies: global_dependencies,
-    include_directories: global_include_dirs,
-    install_rpath: rpath,
-    link_args: global_link_args,
-    cpp_args: global_args,
-    objc_args: global_args,
-    objcpp_args: global_args,
-    win_subsystem: 'windows',
-    install: (host_system != 'windows')
-)
+if host_system == 'android'
+    shared_library('main',
+        sources: global_sources,
+        dependencies: global_dependencies,
+        include_directories: global_include_dirs,
+        link_args: global_link_args,
+        cpp_args: global_args,
+        install: true
+    )
+else
+    executable(exe_name,
+        sources: global_sources,
+        dependencies: global_dependencies,
+        include_directories: global_include_dirs,
+        install_rpath: rpath,
+        link_args: global_link_args,
+        cpp_args: global_args,
+        objc_args: global_args,
+        objcpp_args: global_args,
+        win_subsystem: 'windows',
+        install: (host_system != 'windows')
+    )
+endif
