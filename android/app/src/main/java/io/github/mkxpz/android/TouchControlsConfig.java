@@ -1,5 +1,6 @@
 package io.github.mkxpz.android;
 
+import android.content.Context;
 import android.util.Log;
 import android.view.KeyEvent;
 
@@ -9,6 +10,7 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -18,12 +20,15 @@ import java.util.Locale;
 /**
  * Layout of the on-screen pad.
  *
- * <p>A game may ship its own layout in {@code <gameDir>/android_controls.json}
- * (see {@code android/README.md}). When the file is missing or invalid the
- * built-in layout is used.
+ * <p>The layout comes from the first file that exists:
  *
- * <p>Positions are fractions of the screen: {@code x} of the width, {@code y}
- * of the height, {@code size} is the diameter as a fraction of the height.
+ * <ol>
+ * <li>{@code <filesDir>/controls_user.json}: written by the in-app editor.</li>
+ * <li>{@code <gameDir>/android_controls.json}: shipped by the game.</li>
+ * <li>The built-in layout.</li>
+ * </ol>
+ *
+ * <p>See {@code android/README.md} for the format of the files.
  */
 public final class TouchControlsConfig {
 
@@ -32,25 +37,28 @@ public final class TouchControlsConfig {
     /** File read from the game folder. */
     public static final String FILE_NAME = "android_controls.json";
 
+    /** File written by the in-app editor. */
+    public static final String USER_FILE_NAME = "controls_user.json";
+
     /** One control of the pad. */
     public static final class Spec {
         /** Text drawn in the middle of the control. */
-        public final String label;
+        public String label;
         /** Android key code sent to the engine. */
-        public final int keyCode;
+        public int keyCode;
         /** Column of the grid, or the center of the control. */
-        public final float x;
+        public float x;
         /** Row of the grid, or the center of the control. */
-        public final float y;
-        /** Diameter, as a fraction of the screen height. */
-        public final float size;
+        public float y;
+        /** Diameter, as a fraction of the shortest side of the screen. */
+        public float size;
         /** True when the control belongs to the group the toggle hides. */
-        public final boolean secondary;
+        public boolean secondary;
         /**
          * True when {@link #x} and {@link #y} only say in which cell of an
          * automatic grid the control goes, and not where it is drawn.
          */
-        public final boolean grid;
+        public boolean grid;
 
         Spec(String label, int keyCode, float x, float y, float size, boolean secondary,
                 boolean grid) {
@@ -62,6 +70,12 @@ public final class TouchControlsConfig {
             this.secondary = secondary;
             this.grid = grid;
         }
+
+        /** Name of the key, as it is written in the layout files. */
+        public String keyName() {
+            String name = KeyEvent.keyCodeToString(keyCode);
+            return name.startsWith("KEYCODE_") ? name.substring("KEYCODE_".length()) : name;
+        }
     }
 
     /** Buttons of the pad; the first ones are drawn on top of the others. */
@@ -72,26 +86,105 @@ public final class TouchControlsConfig {
     public Spec toggle;
 
     /**
-     * Reads the layout of a game.
+     * Reads the layout of the game.
      *
+     * @param context used to find the file written by the editor
      * @param gameDir folder of the game (the one exported as MKXPZ_GAME_DIR)
-     * @return the layout of the game, or the default one when it cannot be read
+     * @return the layout to use, never null
      */
-    public static TouchControlsConfig load(File gameDir) {
-        File file = new File(gameDir, FILE_NAME);
+    public static TouchControlsConfig load(Context context, File gameDir) {
+        TouchControlsConfig config = loadFile(new File(context.getFilesDir(), USER_FILE_NAME));
+        if (config != null) {
+            return config;
+        }
+        config = loadFile(new File(gameDir, FILE_NAME));
+        if (config != null) {
+            return config;
+        }
+        return defaults();
+    }
+
+    /** Reads a layout file, or returns null when it cannot be used. */
+    public static TouchControlsConfig loadFile(File file) {
         if (!file.isFile()) {
-            return defaults();
+            return null;
         }
         try {
             TouchControlsConfig config = parse(new JSONObject(readFile(file)));
             if (config == null) {
-                return defaults();
+                Log.w(TAG, "Ignoring " + file + ": no usable button");
             }
             return config;
         } catch (Exception e) {
             Log.w(TAG, "Ignoring " + file + ": " + e);
-            return defaults();
+            return null;
         }
+    }
+
+    /** Writes the layout in the file of the user. */
+    public void save(Context context) {
+        File file = new File(context.getFilesDir(), USER_FILE_NAME);
+        try {
+            String text = toJson().toString(2);
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                out.write(text.getBytes("UTF-8"));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Could not write " + file, e);
+        }
+    }
+
+    /** Deletes the layout written by the editor, if any. */
+    public static void deleteUserFile(Context context) {
+        File file = new File(context.getFilesDir(), USER_FILE_NAME);
+        if (file.exists() && !file.delete()) {
+            Log.e(TAG, "Could not delete " + file);
+        }
+    }
+
+    /** True when the editor has a layout of its own. */
+    public static boolean hasUserFile(Context context) {
+        return new File(context.getFilesDir(), USER_FILE_NAME).isFile();
+    }
+
+    /** The layout in the format of the layout files. */
+    public JSONObject toJson() {
+        JSONObject root = new JSONObject();
+        try {
+            JSONArray array = new JSONArray();
+            for (Spec spec : buttons) {
+                array.put(toJson(spec));
+            }
+            root.put("buttons", array);
+            if (dpad != null) {
+                root.put("dpad", toJson(dpad));
+            }
+            if (toggle != null) {
+                root.put("toggle", toJson(toggle));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Could not build the layout", e);
+        }
+        return root;
+    }
+
+    private static JSONObject toJson(Spec spec) {
+        JSONObject entry = new JSONObject();
+        try {
+            entry.put("label", spec.label);
+            if (spec.keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                entry.put("key", spec.keyName());
+            }
+            entry.put("x", (double) spec.x);
+            entry.put("y", (double) spec.y);
+            entry.put("size", (double) spec.size);
+            if (spec.secondary) {
+                entry.put("secondary", true);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Could not build the layout", e);
+        }
+        return entry;
     }
 
     /**
@@ -122,14 +215,14 @@ public final class TouchControlsConfig {
         config.buttons.add(spec("Alt", "ALT_LEFT", 3f, 2f, 0.130f));
 
         /* Left hand: the d-pad, in the other side bar. */
-        config.dpad = new Spec("", 0, 0f, 0f, 0.300f, false, false);
+        config.dpad = new Spec("", 0, 0f, 0f, 0.300f, false, true);
         return config;
     }
 
     private static TouchControlsConfig parse(JSONObject root) {
         JSONArray array = root.optJSONArray("buttons");
         if (array == null) {
-            Log.w(TAG, "No \"buttons\" array; using the default layout");
+            Log.w(TAG, "No \"buttons\" array");
             return null;
         }
 
@@ -158,7 +251,6 @@ public final class TouchControlsConfig {
                     entry.optBoolean("secondary", false), false));
         }
         if (config.buttons.isEmpty()) {
-            Log.w(TAG, "No usable button; using the default layout");
             return null;
         }
 

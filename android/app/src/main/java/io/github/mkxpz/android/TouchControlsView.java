@@ -10,6 +10,7 @@ import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.FrameLayout;
 
 import org.libsdl.app.SDLActivity;
 
@@ -23,8 +24,9 @@ import java.util.Set;
 /**
  * Virtual game pad drawn on top of the SDL surface.
  *
- * <p>The layout comes from {@link TouchControlsConfig}: either the one the
- * game ships ({@code <gameDir>/android_controls.json}) or the default one.
+ * <p>The layout comes from {@link TouchControlsConfig}: the one the editor
+ * wrote, the one the game ships ({@code <gameDir>/android_controls.json}) or
+ * the built-in one.
  *
  * <p>Touches are turned into SDL keyboard events, so the engine sees them as
  * ordinary keyboard input. SDL translates the Android key codes to scancodes
@@ -55,7 +57,7 @@ import java.util.Set;
  * <p>Touches that do not land on a control are not consumed, so the SDL
  * surface below keeps receiving them (the game uses them as mouse input).
  */
-public final class TouchControlsView extends View {
+public final class TouchControlsView extends FrameLayout {
 
     /* Key codes injected into SDL (see the class comment for the mapping). */
     private static final int DPAD_UP = KeyEvent.KEYCODE_DPAD_UP;
@@ -100,6 +102,11 @@ public final class TouchControlsView extends View {
         }
     }
 
+    /** Told when the editor is opened or closed. */
+    public interface EditListener {
+        void onEditModeChanged(boolean editing);
+    }
+
     private final List<Control> controls = new ArrayList<>();
     private final SparseArray<Touch> touches = new SparseArray<>();
     /** How many fingers hold each key, so a key is released only once. */
@@ -107,27 +114,62 @@ public final class TouchControlsView extends View {
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    private TouchControlsConfig config;
     private Control dpad;
     private Control toggle;
     private int dpDirMask;
     private boolean secondaryVisible;
     private boolean controlsVisible = true;
 
+    /* Editor state. */
+    private EditListener editListener;
+    private boolean editing;
+    private Control selected;
+    private Control dragged;
+    private int dragPointer;
+    private float dragOffsetX;
+    private float dragOffsetY;
+    private float gearX;
+    private float gearY;
+    private float gearR;
+
     public TouchControlsView(Context context, TouchControlsConfig config) {
         super(context);
-        for (TouchControlsConfig.Spec spec : config.buttons) {
-            controls.add(new Control(spec));
-        }
-        if (config.dpad != null) {
-            dpad = new Control(config.dpad);
-        }
-        if (config.toggle != null) {
-            toggle = new Control(config.toggle);
-        }
+        /* The pad draws itself; the bar of the editor is a child. */
+        setWillNotDraw(false);
+        setConfig(config);
         setFocusable(false);
         setFocusableInTouchMode(false);
         setHapticFeedbackEnabled(true);
         paint.setStrokeCap(Paint.Cap.ROUND);
+    }
+
+    /** Replaces the layout of the pad. */
+    public void setConfig(TouchControlsConfig config) {
+        this.config = config;
+        controls.clear();
+        for (TouchControlsConfig.Spec spec : config.buttons) {
+            controls.add(new Control(spec));
+        }
+        dpad = config.dpad != null ? new Control(config.dpad) : null;
+        toggle = config.toggle != null ? new Control(config.toggle) : null;
+        selected = null;
+        dragged = null;
+        layout(getWidth(), getHeight());
+        invalidate();
+    }
+
+    /** The layout of the pad, as it is now (the editor changes it). */
+    public TouchControlsConfig getConfig() {
+        return config;
+    }
+
+    public void setEditListener(EditListener listener) {
+        editListener = listener;
+    }
+
+    public boolean isEditing() {
+        return editing;
     }
 
     /* ------------------------------------------------------------ layout */
@@ -153,6 +195,24 @@ public final class TouchControlsView extends View {
         float unit = Math.min(w, h);
         float gap = 0.016f * unit;
         float margin = 0.030f * unit;
+
+        gearR = 0.035f * unit;
+        gearX = margin + gearR;
+        gearY = margin + gearR;
+
+        if (isAbsolute()) {
+            /* Every control says where it goes. */
+            for (Control control : controls) {
+                place(control, w, h);
+            }
+            if (dpad != null) {
+                place(dpad, w, h);
+            }
+            if (toggle != null) {
+                place(toggle, w, h);
+            }
+            return;
+        }
 
         float gameW = Math.min(w, h * GAME_ASPECT);
         float gameH = Math.min(h, w / GAME_ASPECT);
@@ -189,32 +249,19 @@ public final class TouchControlsView extends View {
 
         List<Control> visible = new ArrayList<>();
         float maxSize = 0f;
-        boolean grid = false;
         for (Control control : controls) {
             if (control.spec.secondary && !secondaryVisible) {
                 continue;
             }
             visible.add(control);
             maxSize = Math.max(maxSize, control.spec.size);
-            grid |= control.spec.grid;
         }
         int count = visible.size();
         if (count == 0) {
             return;
         }
 
-        if (!grid) {
-            /* The layout of the game says where every button goes. */
-            for (Control control : visible) {
-                place(control, w, h);
-            }
-            if (toggle != null) {
-                place(toggle, w, h);
-            }
-            return;
-        }
-
-        /* Otherwise the buttons are arranged in a grid, as big as they fit. */
+        /* The buttons are arranged in a grid, as big as they fit. */
         int cols = 1;
         int rows = 1;
         for (Control control : visible) {
@@ -249,6 +296,19 @@ public final class TouchControlsView extends View {
         }
     }
 
+    /** True when every control says where it goes. */
+    private boolean isAbsolute() {
+        for (Control control : controls) {
+            if (control.spec.grid) {
+                return false;
+            }
+        }
+        if (dpad != null && dpad.spec.grid) {
+            return false;
+        }
+        return toggle == null || !toggle.spec.grid;
+    }
+
     /**
      * Places a control at the position asked by the layout.
      *
@@ -281,6 +341,9 @@ public final class TouchControlsView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
+        if (editing) {
+            return onEditTouch(event, action);
+        }
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN: {
@@ -290,6 +353,11 @@ public final class TouchControlsView extends View {
 
                 /* Any touch brings the pad back if a keyboard or a pad hid it. */
                 setControlsVisible(true);
+
+                if (hitGear(x, y)) {
+                    beginEditing();
+                    return true;
+                }
 
                 int hit = hitTest(x, y);
                 if (hit == HIT_NONE) {
@@ -362,6 +430,84 @@ public final class TouchControlsView extends View {
     }
 
     /**
+     * Handles the touches while the editor is open.
+     *
+     * <p>No key is sent to the engine while editing.
+     */
+    private boolean onEditTouch(MotionEvent event, int action) {
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN: {
+                int index = event.getActionIndex();
+                float x = event.getX(index);
+                float y = event.getY(index);
+                if (hitGear(x, y)) {
+                    /* The bar of the editor was hidden: bring it back. */
+                    if (editListener != null) {
+                        editListener.onEditModeChanged(true);
+                    }
+                    return true;
+                }
+                int hit = hitTest(x, y);
+                if (hit == HIT_NONE || hit == HIT_TOGGLE) {
+                    selected = null;
+                    invalidate();
+                    return true;
+                }
+                selected = hit == HIT_DPAD ? dpad : controls.get(hit);
+                if (selected == null) {
+                    return true;
+                }
+                dragged = selected;
+                dragPointer = event.getPointerId(index);
+                dragOffsetX = x - selected.cx;
+                dragOffsetY = y - selected.cy;
+                invalidate();
+                return true;
+            }
+            case MotionEvent.ACTION_MOVE: {
+                if (dragged == null) {
+                    return true;
+                }
+                int index = event.findPointerIndex(dragPointer);
+                if (index < 0) {
+                    return true;
+                }
+                moveTo(dragged, event.getX(index) - dragOffsetX, event.getY(index) - dragOffsetY);
+                invalidate();
+                return true;
+            }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+            case MotionEvent.ACTION_CANCEL: {
+                dragged = null;
+                invalidate();
+                return true;
+            }
+            default:
+                break;
+        }
+        return true;
+    }
+
+    /** Moves a control and keeps the layout in sync with it. */
+    private void moveTo(Control control, float x, float y) {
+        float w = getWidth();
+        float h = getHeight();
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        control.spec.grid = false;
+        control.spec.x = clamp(x / w);
+        control.spec.y = clamp(y / h);
+        place(control, (int) w, (int) h);
+    }
+
+    private static float clamp(float value) {
+        return value < 0f ? 0f : (value > 1f ? 1f : value);
+    }
+
+    /**
      * Finds the control under a point.
      *
      * @return the index of a button, {@link #HIT_DPAD}, {@link #HIT_TOGGLE}
@@ -384,6 +530,12 @@ public final class TouchControlsView extends View {
             return HIT_DPAD;
         }
         return HIT_NONE;
+    }
+
+    private boolean hitGear(float x, float y) {
+        float dx = x - gearX;
+        float dy = y - gearY;
+        return dx * dx + dy * dy <= gearR * gearR * 1.5f;
     }
 
     private static boolean hit(Control control, float x, float y) {
@@ -522,6 +674,110 @@ public final class TouchControlsView extends View {
         super.onDetachedFromWindow();
     }
 
+    /* ------------------------------------------------------------ editor */
+
+    /**
+     * Opens the editor.
+     *
+     * <p>No key is sent to the engine while the editor is open, and the
+     * controls keep the position they have now so that they can be moved.
+     */
+    public void beginEditing() {
+        releaseAllKeys();
+        float w = getWidth();
+        float h = getHeight();
+        for (Control control : controls) {
+            freeze(control, w, h);
+        }
+        if (dpad != null) {
+            freeze(dpad, w, h);
+        }
+        editing = true;
+        selected = null;
+        dragged = null;
+        layout(getWidth(), getHeight());
+        if (editListener != null) {
+            editListener.onEditModeChanged(true);
+        }
+        invalidate();
+    }
+
+    /** Closes the editor, keeping the changes. */
+    public void endEditing() {
+        editing = false;
+        selected = null;
+        dragged = null;
+        if (editListener != null) {
+            editListener.onEditModeChanged(false);
+        }
+        invalidate();
+    }
+
+    /** Writes the position of a control in the layout, as a screen fraction. */
+    private void freeze(Control control, float w, float h) {
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        control.spec.grid = false;
+        control.spec.x = clamp(control.cx / w);
+        control.spec.y = clamp(control.cy / h);
+    }
+
+    /** The control the player has selected, or null. */
+    public TouchControlsConfig.Spec getSelectedSpec() {
+        return selected != null ? selected.spec : null;
+    }
+
+    /** Adds a button and selects it. */
+    public void addButton() {
+        TouchControlsConfig.Spec spec = new TouchControlsConfig.Spec(
+                "?", KeyEvent.KEYCODE_ENTER, 0.5f, 0.5f, 0.130f, false, false);
+        config.buttons.add(spec);
+        Control control = new Control(spec);
+        controls.add(control);
+        layout(getWidth(), getHeight());
+        selected = control;
+        invalidate();
+    }
+
+    /** Removes the selected button. */
+    public void deleteSelected() {
+        if (selected == null || selected == dpad) {
+            return;
+        }
+        controls.remove(selected);
+        config.buttons.remove(selected.spec);
+        selected = null;
+        invalidate();
+    }
+
+    /** Gives the selected control a new key. */
+    public void setSelectedKey(int keyCode) {
+        if (selected == null) {
+            return;
+        }
+        selected.spec.keyCode = keyCode;
+    }
+
+    /** Gives the selected control a new label. */
+    public void setSelectedLabel(String label) {
+        if (selected == null || label == null) {
+            return;
+        }
+        selected.spec.label = label;
+        invalidate();
+    }
+
+    /** Gives the selected control a new size. */
+    public void setSelectedSize(float size) {
+        if (selected == null) {
+            return;
+        }
+        selected.spec.size = size;
+        layout(getWidth(), getHeight());
+        invalidate();
+    }
+
     /* ----------------------------------------------------------- drawing */
 
     public void setControlsVisible(boolean visible) {
@@ -554,6 +810,26 @@ public final class TouchControlsView extends View {
         if (toggle != null) {
             drawToggle(canvas, stroke);
         }
+        drawGear(canvas);
+    }
+
+    /** The little gear that opens the editor. */
+    private void drawGear(Canvas canvas) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(editing ? Color.argb(60, 255, 255, 255) : Color.argb(110, 255, 255, 255));
+        canvas.save();
+        canvas.translate(gearX, gearY);
+        for (int i = 0; i < 8; i++) {
+            canvas.rotate(45f);
+            canvas.drawRect(-gearR * 0.18f, -gearR, gearR * 0.18f, -gearR * 0.68f, paint);
+        }
+        canvas.drawCircle(0f, 0f, gearR * 0.62f, paint);
+        canvas.restore();
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(2f, gearR * 0.12f));
+        paint.setColor(Color.argb(150, 255, 255, 255));
+        canvas.drawCircle(gearX, gearY, gearR * 0.62f, paint);
     }
 
     private void drawDpad(Canvas canvas, float stroke) {
@@ -616,7 +892,8 @@ public final class TouchControlsView extends View {
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(stroke);
-        paint.setColor(Color.argb(120, 255, 255, 255));
+        paint.setColor(control == selected ? Color.argb(255, 255, 200, 80)
+                : Color.argb(120, 255, 255, 255));
         canvas.drawCircle(control.cx, control.cy, control.r, paint);
 
         paint.setStyle(Paint.Style.FILL);

@@ -219,6 +219,13 @@ Un juego puede traer su propio layout en `<gameDir>/android_controls.json`
 Si el archivo no existe o no es válido se usa el layout por defecto y se avisa
 en el log (`adb logcat -s TouchControls`).
 
+El editor de la app escribe su layout en `<filesDir>/controls_user.json`, con
+el mismo formato. El orden de carga es:
+
+1. `<filesDir>/controls_user.json` (el del editor).
+2. `<gameDir>/android_controls.json` (el del juego).
+3. El layout por defecto.
+
 ```json
 {
   "buttons": [
@@ -252,6 +259,27 @@ El layout por defecto pone las teclas como en un teclado de PC:
 ```
 
 con la cruceta a la izquierda.
+
+### Editor de los controles
+
+El botón de engranaje de la esquina superior izquierda del pad abre el
+editor. Mientras el editor está abierto no se manda ninguna tecla al juego y
+las teclas que estaban pulsadas se sueltan.
+
+| Botón | Qué hace |
+|---|---|
+| `Hide` | Esconde la barra para poder mover los controles que quedan debajo. El engranaje la vuelve a mostrar. |
+| `+` | Añade un botón nuevo (con la tecla Intro y la etiqueta `?`) y lo selecciona. |
+| `-` | Borra el botón seleccionado. |
+| `Key` | Elige la tecla: lista con las letras, los números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab y las flechas, o `Press a key...` para usar la tecla que mande el teclado o el mando. |
+| `Text` | Cambia la etiqueta del botón. |
+| `Size` | Cambia el tamaño del botón con un deslizador. |
+| `Def` | Borra `<filesDir>/controls_user.json` y vuelve al layout del juego o al de por defecto. |
+| `Cancel` | Descarta los cambios y cierra el editor. |
+| `Done` | Guarda el layout en `<filesDir>/controls_user.json` y cierra el editor. |
+
+Los botones y la cruceta se mueven arrastrándolos. Las posiciones se guardan
+como fracciones de la pantalla, así que el layout sirve en cualquier teléfono.
 
 ## Configuración
 

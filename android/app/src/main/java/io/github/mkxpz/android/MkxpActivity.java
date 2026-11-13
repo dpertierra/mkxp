@@ -53,6 +53,12 @@ public final class MkxpActivity extends SDLActivity {
     /** On-screen pad drawn over the SDL surface. */
     private TouchControlsView touchControls;
 
+    /** Editor of the on-screen pad. */
+    private TouchControlsEditor controlsEditor;
+
+    /** Folder with the installed game data. */
+    private File gameDir;
+
     /** True while the on-screen keyboard is on the screen. */
     private boolean imeShown;
     /** True when the keyboard was closed by a key and not by the enter key. */
@@ -73,7 +79,7 @@ public final class MkxpActivity extends SDLActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // Set before SDL starts: the native side reads it in main().
-        File gameDir = new GameDataInstaller(this).gameDir();
+        gameDir = new GameDataInstaller(this).gameDir();
         try {
             Os.setenv(ENV_GAME_DIR, gameDir.getAbsolutePath(), true);
             // The enter key of the on-screen keyboard closes the keyboard
@@ -87,14 +93,44 @@ public final class MkxpActivity extends SDLActivity {
 
         // mLayout is null when SDL could not start (broken libraries).
         if (mLayout != null) {
-            // The game may ship its own on-screen pad layout.
-            TouchControlsConfig config = TouchControlsConfig.load(gameDir);
+            // The layout of the editor wins over the one of the game, which
+            // wins over the built-in one.
+            TouchControlsConfig config = TouchControlsConfig.load(this, gameDir);
             touchControls = new TouchControlsView(this, config);
+            controlsEditor = new TouchControlsEditor(this, touchControls, editorCallback);
+            touchControls.setEditListener(editing -> {
+                if (editing) {
+                    controlsEditor.show();
+                } else {
+                    controlsEditor.hide();
+                }
+            });
             mLayout.addView(touchControls, new RelativeLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         handler.post(imeWatcher);
     }
+
+    /** What the editor of the pad asks the activity to do. */
+    private final TouchControlsEditor.Callback editorCallback = new TouchControlsEditor.Callback() {
+        @Override
+        public void onSave(TouchControlsConfig config) {
+            config.save(MkxpActivity.this);
+            touchControls.endEditing();
+        }
+
+        @Override
+        public void onCancel() {
+            touchControls.setConfig(TouchControlsConfig.load(MkxpActivity.this, gameDir));
+            touchControls.endEditing();
+        }
+
+        @Override
+        public void onRestoreDefaults() {
+            TouchControlsConfig.deleteUserFile(MkxpActivity.this);
+            touchControls.setConfig(TouchControlsConfig.load(MkxpActivity.this, gameDir));
+        }
+    };
 
     @Override
     protected void onPause() {
@@ -115,7 +151,12 @@ public final class MkxpActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (touchControls != null && isPhysicalInput(event.getSource())) {
+        if (controlsEditor != null && controlsEditor.captureKey(event)) {
+            /* The editor was waiting for a key to assign to a button. */
+            return true;
+        }
+        if (touchControls != null && isPhysicalInput(event.getSource())
+                && !touchControls.isEditing()) {
             // A keyboard or a pad is in use: the on-screen pad is not needed.
             touchControls.setControlsVisible(false);
         }
@@ -156,7 +197,7 @@ public final class MkxpActivity extends SDLActivity {
     private void watchIme() {
         boolean shown = SDLActivity.isScreenKeyboardShown();
         if (imeShown && !shown) {
-            if (!imeClosedByKey) {
+            if (!imeClosedByKey && (touchControls == null || !touchControls.isEditing())) {
                 pressReturn();
             }
             imeClosedByKey = false;
@@ -173,7 +214,8 @@ public final class MkxpActivity extends SDLActivity {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
-        if (touchControls != null && isPhysicalInput(event.getSource())) {
+        if (touchControls != null && isPhysicalInput(event.getSource())
+                && !touchControls.isEditing()) {
             touchControls.setControlsVisible(false);
         }
         return super.onGenericMotionEvent(event);
