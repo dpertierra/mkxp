@@ -109,10 +109,15 @@ check-toolchain:
 	@test -n "$(BASERUBY)" || echo "warning: no host ruby, 'ruby' target will fail (needs --with-baseruby)"
 	@test -n "$(ERB_LIB)" || echo "warning: host ruby has no erb; 'ruby' target will fail (gem install erb)"
 
+# The configure-step products (cmakebuild/Makefile, autotools Makefile) are
+# ORDER-ONLY prerequisites of the installed libraries: they must exist before the
+# build, but a freshly generated configure output is often timestamped a few
+# milliseconds after the install that follows it, which would otherwise make
+# every `make` reinstall everything.
 # zlib
 zlib: init_dirs check-toolchain $(LIBDIR)/libz.a
 
-$(LIBDIR)/libz.a: $(DOWNLOADS)/zlib/cmakebuild/Makefile
+$(LIBDIR)/libz.a: | $(DOWNLOADS)/zlib/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/zlib/cmakebuild; \
 	make -j$(NPROC); make install; \
 	rm -f $(LIBDIR)/libz.so $(LIBDIR)/libz.so.*; \
@@ -130,7 +135,7 @@ $(DOWNLOADS)/zlib/CMakeLists.txt:
 # libpng
 libpng: init_dirs zlib $(LIBDIR)/libpng.a
 
-$(LIBDIR)/libpng.a: $(LIBDIR)/libz.a $(DOWNLOADS)/libpng/cmakebuild/Makefile
+$(LIBDIR)/libpng.a: $(LIBDIR)/libz.a | $(DOWNLOADS)/libpng/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/libpng/cmakebuild; \
 	make -j$(NPROC); make install; \
 	cd $(LIBDIR)/pkgconfig; \
@@ -149,7 +154,7 @@ $(DOWNLOADS)/libpng/CMakeLists.txt:
 # Ogg, dependency of Vorbis
 libogg: init_dirs check-toolchain $(LIBDIR)/libogg.a
 
-$(LIBDIR)/libogg.a: $(DOWNLOADS)/ogg/Makefile
+$(LIBDIR)/libogg.a: | $(DOWNLOADS)/ogg/Makefile
 	set -e; cd $(DOWNLOADS)/ogg; \
 	make -j$(NPROC); make install
 
@@ -166,7 +171,7 @@ $(DOWNLOADS)/ogg/configure.ac:
 # Vorbis
 libvorbis: init_dirs libogg $(LIBDIR)/libvorbis.a
 
-$(LIBDIR)/libvorbis.a: $(LIBDIR)/libogg.a $(DOWNLOADS)/vorbis/cmakebuild/Makefile
+$(LIBDIR)/libvorbis.a: $(LIBDIR)/libogg.a | $(DOWNLOADS)/vorbis/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/vorbis/cmakebuild; \
 	make -j$(NPROC); make install
 
@@ -184,7 +189,7 @@ $(DOWNLOADS)/vorbis/CMakeLists.txt:
 # (version kept in sync with the cloned mkxp-z/freetype2 branch).
 freetype: init_dirs libpng $(LIBDIR)/libfreetype.a
 
-$(LIBDIR)/libfreetype.a: $(LIBDIR)/libpng.a $(DOWNLOADS)/freetype/cmakebuild/Makefile
+$(LIBDIR)/libfreetype.a: $(LIBDIR)/libpng.a | $(DOWNLOADS)/freetype/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/freetype/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/freetype2.pc || \
@@ -206,7 +211,7 @@ $(DOWNLOADS)/freetype/CMakeLists.txt:
 # PhysFS
 physfs: init_dirs check-toolchain $(LIBDIR)/libphysfs.a
 
-$(LIBDIR)/libphysfs.a: $(DOWNLOADS)/physfs/cmakebuild/Makefile
+$(LIBDIR)/libphysfs.a: | $(DOWNLOADS)/physfs/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/physfs/cmakebuild; \
 	make -j$(NPROC); make install
 
@@ -222,7 +227,7 @@ $(DOWNLOADS)/physfs/CMakeLists.txt:
 # SDL2 is SHARED on Android: SDLActivity loads libSDL2.so via System.loadLibrary.
 sdl2: init_dirs check-toolchain $(LIBDIR)/libSDL2.so
 
-$(LIBDIR)/libSDL2.so: $(DOWNLOADS)/sdl2/cmakebuild/Makefile
+$(LIBDIR)/libSDL2.so: | $(DOWNLOADS)/sdl2/cmakebuild/Makefile
 	@# NDK r30 removed ALooper_pollAll(); upstream SDL (2.30.10+) calls pollOnce here.
 	@if grep -q ALooper_pollAll $(DOWNLOADS)/sdl2/src/sensor/android/SDL_androidsensor.c; then \
 	  sed -i 's/ALooper_pollAll/ALooper_pollOnce/g' \
@@ -245,7 +250,7 @@ $(DOWNLOADS)/sdl2/CMakeLists.txt:
 # time and none of the game assets need it.
 sdl2image: init_dirs sdl2 libpng $(LIBDIR)/libSDL2_image.a
 
-$(LIBDIR)/libSDL2_image.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libpng.a $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile
+$(LIBDIR)/libSDL2_image.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libpng.a | $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/sdl2_image/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/SDL2_image.pc || \
@@ -270,7 +275,7 @@ $(DOWNLOADS)/sdl2_image/CMakeLists.txt:
 # SDL2 (ttf)
 sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
-$(LIBDIR)/libSDL2_ttf.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libfreetype.a $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile
+$(LIBDIR)/libSDL2_ttf.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libfreetype.a | $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/sdl2_ttf/cmakebuild; \
 	make -j$(NPROC); make install; \
 	pc=$(LIBDIR)/pkgconfig/SDL2_ttf.pc; \
@@ -300,7 +305,7 @@ $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt:
 # SDL_sound
 sdlsound: init_dirs sdl2 libogg libvorbis $(LIBDIR)/libSDL2_sound.a
 
-$(LIBDIR)/libSDL2_sound.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libvorbis.a $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile
+$(LIBDIR)/libSDL2_sound.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libvorbis.a | $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/sdl_sound/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/SDL2_sound.pc || \
@@ -327,7 +332,7 @@ $(DOWNLOADS)/sdl_sound/CMakeLists.txt:
 # relinkable objects — revisit if the license review demands a shared libopenal.so.
 openal: init_dirs check-toolchain $(LIBDIR)/libopenal.a
 
-$(LIBDIR)/libopenal.a: $(DOWNLOADS)/openal/cmakebuild/Makefile
+$(LIBDIR)/libopenal.a: | $(DOWNLOADS)/openal/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/openal/cmakebuild; \
 	make -j$(NPROC); make install
 
@@ -347,14 +352,18 @@ $(DOWNLOADS)/openal/CMakeLists.txt:
 # MRI Ruby, static, no shared lib: the engine links libruby-static.a and the
 # extensions are linked in (--with-static-linked-ext).
 # Ruby does not install a .pc file, so ruby-3.1.pc is generated here.
+# `make install` copies the archives with `install -p`, preserving the build
+# timestamp, which is older than the libs installed afterwards (libz.a); the
+# touch keeps this target from looking stale on the next run.
 ruby: init_dirs zlib $(LIBDIR)/libruby-static.a
 
-$(LIBDIR)/libruby-static.a: $(LIBDIR)/libz.a $(DOWNLOADS)/ruby/Makefile
+$(LIBDIR)/libruby-static.a: $(LIBDIR)/libz.a | $(DOWNLOADS)/ruby/Makefile
 	@test -n "$(ERB_LIB)" || { \
 	  echo "host ruby has no erb: install it (gem install erb) and retry"; exit 1; }
 	set -e; cd $(DOWNLOADS)/ruby; \
 	make -j$(NPROC); \
 	make install; \
+	touch $(LIBDIR)/libruby-static.a; \
 	$(call merge_ruby_ext); \
 	$(call write_ruby_pc)
 
