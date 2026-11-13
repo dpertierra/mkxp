@@ -194,7 +194,7 @@ $(LIBDIR)/libiconv.a: | $(DOWNLOADS)/libiconv-1.18/Makefile
 $(DOWNLOADS)/libiconv-1.18/Makefile: $(DOWNLOADS)/libiconv-1.18/configure
 	set -e; cd $(DOWNLOADS)/libiconv-1.18; $(CONFIGURE) --enable-static --disable-shared
 
-$(DOWNLOADS)/libiconv-1.18/configure: $(DOWNLOADS)/libiconv-1.18.tar.gz
+$(DOWNLOADS)/libiconv-1.18/configure: | $(DOWNLOADS)/libiconv-1.18.tar.gz
 	tar -xzf $< -C $(DOWNLOADS)
 
 $(DOWNLOADS)/libiconv-1.18.tar.gz:

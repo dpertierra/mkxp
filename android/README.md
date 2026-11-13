@@ -1,8 +1,9 @@
-# Android: app shell de MKXP-Z
+# Android: build nativo y APK de MKXP-Z
 
 Proyecto Gradle del APK Android. **Gradle no compila nada nativo**: el motor
 (`libmain.so`) y el runtime de SDL2 (`libSDL2.so`) se compilan aparte con
-Meson + NDK y se copian a `app/src/main/jniLibs/arm64-v8a/` antes de empaquetar.
+Meson + NDK. `build-native.sh` los copia junto a `libc++_shared.so` a
+`app/src/main/jniLibs/arm64-v8a/` antes de empaquetar.
 No hay `externalNativeBuild`.
 
 ```
@@ -17,9 +18,10 @@ android/
 │       ├── java/org/libsdl/app/          (gitignored) Java de SDL2, copiado por fetch-sdl-java.sh
 │       ├── assets/game/                  (gitignored) datos del juego que se empaquetan
 │       ├── assets/game.version           (gitignored) marcador de versión de esos datos
-│       ├── jniLibs/arm64-v8a/            (gitignored) libSDL2.so, libmain.so
+│       ├── jniLibs/arm64-v8a/            (gitignored) libmain.so, libSDL2.so, libc++_shared.so
 │       └── res/                          icono, tema, pantalla de copia
-├── fetch-sdl-java.sh                     baja el Java de SDL2 2.30.12 y lo copia
+├── build-native.sh                       compila, valida y copia las tres bibliotecas
+├── fetch-sdl-java.sh                     baja el Java de SDL2 2.28.1 y lo copia
 ├── meson-cross-arm64.ini                 cross-file de Meson para el NDK
 ├── gradle/                               wrapper
 └── settings.gradle.kts, build.gradle.kts, gradle.properties
@@ -27,51 +29,117 @@ android/
 
 ## Requisitos
 
-- JDK 17
+- Host Linux x86_64, JDK 17, Python 3 con venv/pip, `pkg-config`, `xxd` y `unzip`
 - Android SDK: plataforma `android-36`, build-tools `36.0.0`
   (`android/local.properties` con `sdk.dir=...`, o variable `ANDROID_HOME`)
-- NDK r27.2.12479018 o r30.0.16248370 (`~/Android/Sdk/ndk/`)
-- Meson + Ninja
-- SDL2 **2.30.12** (la Java la baja `fetch-sdl-java.sh`; la nativa la compila
-  el script de deps con la misma versión)
+- NDK **30.0.16248370**, API 26, ABI `arm64-v8a`
+- Meson + Ninja (build verificado con Meson 1.12.1 y Ninja 1.13.2)
+- SDL2 **2.28.1**, fork `mkxp-z-2.28.1` de las deps. El Java oficial de
+  esa versión coincide con el Java del fork; no usar Java 2.30.12 con él.
 
 ## Build
 
-### 1. Dependencias nativas
+Todos los comandos parten de la raíz del repositorio, salvo el bloque Gradle.
+
+### 1. Herramientas locales, sin sudo
+
+```bash
+python3 -m venv "$HOME/.cache/mkxpz/android-build-tools"
+source "$HOME/.cache/mkxpz/android-build-tools/bin/activate"
+pip install meson==1.12.1 ninja==1.13.2
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
+export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/30.0.16248370}"
+```
+
+### 2. Dependencias nativas
 
 Los scripts de `android/deps/` dejan el runtime de SDL2 listo
 (`libSDL2.so`, shared) y el resto de librerías estáticas enlazadas dentro del
 motor.
 
-### 2. Motor con Meson
-
 ```bash
-meson setup build-android --cross-file android/meson-cross-arm64.ini \
-    -Dbuildtype=release -Dgfx_backend=gles
-ninja -C build-android
+make -C android/deps
 ```
 
-El `meson.build` de la raíz necesita la rama `host_system == 'android'` (Fase 2
-del plan) para generar `libmain.so` en lugar de un ejecutable.
-
-Para cambiar de versión de NDK, edita la ruta en `android/meson-cross-arm64.ini`:
+Si ya existen las deps iniciales, **no recompilarlas**. Añadir solo las cinco
+bibliotecas que faltaban en ese primer conjunto:
 
 ```bash
-sed -i 's|ndk/[0-9.]*/|ndk/30.0.16248370/|' android/meson-cross-arm64.ini
+export ANDROID_DEP_PREFIX=/ruta/absoluta/al/build-arm64/existente
+make -C android/deps libopusfile pixman uchardet iconv \
+    BUILD_PREFIX="$ANDROID_DEP_PREFIX" \
+    DOWNLOADS=/ruta/absoluta/a/downloads/arm64/existente
 ```
 
-### 3. Copiar los `.so`
+`libopusfile` añade también `libopus`. Mantener las rutas absolutas originales
+del prefix: sus `.pc` y los builds de las deps contienen esas rutas. Ver
+`deps/README.md` para requisitos y licencias.
+
+### 3. Motor, comprobaciones ELF y copia automática
 
 ```bash
-mkdir -p android/app/src/main/jniLibs/arm64-v8a
-cp build-android/src/libmain.so          android/app/src/main/jniLibs/arm64-v8a/
-cp <ndk-build>/libSDL2.so                android/app/src/main/jniLibs/arm64-v8a/
+./android/build-native.sh
 ```
 
-Si SDL2 se enlaza estático dentro de `libmain.so`, no hay `libSDL2.so` que
-copiar y `MkxpActivity.getLibraries()` debe devolver solo `"main"`.
+Variables opcionales:
 
-### 4. Datos del juego
+- `ANDROID_DEP_PREFIX`: por defecto `android/deps/build-arm64`.
+- `ANDROID_NDK_HOME`: por defecto `~/Android/Sdk/ndk/30.0.16248370`.
+- `MKXPZ_ANDROID_BUILD_DIR`: por defecto `android/build-native`.
+- `JOBS`: paralelismo de Ninja; por defecto `nproc`.
+
+El script configura Meson con `meson-cross-arm64.ini`, aísla
+`PKG_CONFIG_LIBDIR` y pasa `-Dmri_version=3.1 -Denable-https=false
+-Duse_miniffi=false -Dshared_fluid=false -Dgfx_backend=gles`. No descarga ni
+recompila las deps. El cross-file resuelve los compiladores desde el NDK en
+`PATH`; no contiene rutas personales.
+
+Ninja genera `android/build-native/libmain.so` (**no** `src/libmain.so`).
+Meson instala una copia sin RPATH del host en `build-native/stage/lib/`;
+el script comprueba AArch64, `SDL_main`, los puntos JNI de SDL2 y los
+`NEEDED` de las tres bibliotecas. El enlazado usa `--no-undefined` y alineación
+de segmentos de 16 KB. Después copia y elimina símbolos de depuración de
+las tres `.so` en `app/src/main/jniLibs/arm64-v8a/`.
+
+SDL2 sigue siendo **shared**; `MkxpActivity.getLibraries()` carga `SDL2`
+antes de `main`. El loader resuelve su dependencia de `libc++_shared.so`
+desde el mismo APK.
+
+### 4. Java de SDL2 y APK sin datos de juego
+
+```bash
+./android/fetch-sdl-java.sh
+cd android
+./gradlew assembleDebug
+unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'lib/arm64-v8a/.*\.so'
+```
+
+El APK queda en `android/app/build/outputs/apk/debug/app-debug.apk`. La lista
+debe incluir `libmain.so`, `libSDL2.so` y `libc++_shared.so`. No hace falta
+incluir datos de juego para compilar/empaquetar; este APK vacío no demuestra
+el arranque del juego.
+
+`fetch-sdl-java.sh` descarga SDL2 **2.28.1** con SHA-256 y copia sus nueve
+archivos Java (gitignored). También se puede ejecutar la tarea
+`./gradlew fetchSdlJava`. Gradle puede avisar de que no puede quitar símbolos
+nativos si no encuentra su NDK por defecto: el script nativo ya los quita.
+
+Comprobaciones adicionales, desde la raíz del repo:
+
+```bash
+"$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+    -d android/app/src/main/jniLibs/arm64-v8a/libmain.so
+"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify \
+    android/app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 \
+    android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+`libmain.so` enlazado necesita solo `liblog.so`, `libdl.so`, `libm.so`,
+`libSDL2.so`, `libc++_shared.so` y `libc.so`. Los otros `NEEDED` transitivos
+de SDL2 son bibliotecas del sistema Android.
+
+### 5. Datos del juego (opcional para este build)
 
 ```bash
 mkdir -p android/app/src/main/assets/game
@@ -84,26 +152,6 @@ echo "1.2.1.1" > android/app/src/main/assets/game.version
 
 `game.version` es el marcador: si su contenido cambia, la app reinstala los
 datos en el primer arranque posterior a la actualización.
-
-### 5. Java de SDL2
-
-```bash
-./android/fetch-sdl-java.sh
-```
-
-Descarga el tarball oficial de SDL2 2.30.12 (con checksum), lo verifica y
-copia `android-project/app/src/main/java/org/libsdl/app/*.java` a
-`app/src/main/java/org/libsdl/app/`. El destino está en `.gitignore`: el Java
-de SDL2 no está vendorizado. También hay tarea de Gradle: `./gradlew
-fetchSdlJava`.
-
-### 6. APK
-
-```bash
-cd android
-./gradlew assembleDebug
-# android/app/build/outputs/apk/debug/app-debug.apk
-```
 
 ## Directorio del juego (mecanismo elegido)
 
@@ -142,5 +190,12 @@ ABIs: solo `arm64-v8a`. `minSdk 26`, `targetSdk 35` (`compileSdk 36`).
   Bluetooth y USB opcionales; `android:isGame="true"`;
   `configChanges` como en la plantilla de SDL; `sensorLandscape` y pantalla
   encendida (`FLAG_KEEP_SCREEN_ON`) en `MkxpActivity`.
-- Fuera de esta app shell (Fase 2 del plan): `MKXPZ_PLATFORM_ANDROID`, logging
-  a logcat, ciclo de vida pausa/reanudación y botón atrás.
+- Android omite Theora, FluidSynth, OpenSSL, MiniFFI y las dependencias de
+  escritorio (X11/GTK, bzip2, libcharset, SDL2main). `Graphics.playMovie`
+  informa de que la reproducción de vídeo no está disponible.
+- Ruby se enlaza estático con `libruby-ext.a`; empaquetar el runtime Ruby y
+  los datos que necesite un juego real sigue siendo trabajo de integración.
+- Verificado aquí: compilación/enlace, exportaciones, dependencias ELF,
+  empaquetado, firma debug y alineación ZIP de 16 KB. Sin dispositivo:
+  arranque, render, audio, JNI en ejecución, pausa/reanudación, botón atrás
+  y guardado siguen sin comprobarse.
