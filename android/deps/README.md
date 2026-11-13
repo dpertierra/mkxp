@@ -11,7 +11,7 @@ regenerated from source, never committed.
 
 - Android NDK r26+ (default `$HOME/Android/Sdk/ndk/30.0.16248370`, override with
   `ANDROID_NDK_HOME` or `NDK=/path`), API 26, `arm64-v8a`.
-- Host tools: `cmake`, `make`, `git`, `pkg-config`, autoconf/automake/libtool
+- Host tools: `cmake`, `make`, `git`, `curl`, `sha256sum`, `pkg-config`, autoconf/automake/libtool
   (for libogg and Ruby), `patch`-capable `sed`.
 - Host Ruby for cross-building MRI (`BASERUBY`, defaults to `ruby` on `PATH`).
   It must also provide the `erb` library: Ruby's own build scripts
