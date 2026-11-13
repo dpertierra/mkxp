@@ -118,25 +118,9 @@ cd android
    `Os.setenv("MKXPZ_GAME_DIR", "<filesDir>/game", true)` **antes** de que SDL
    arranque el hilo nativo.
 
-**El motor tiene que leer `MKXPZ_GAME_DIR` y hacer `chdir()` ahí antes de
-cargar `Data/`.** `mkxp_fs::getDefaultGameRoot()` devuelve `SDL_GetBasePath()`,
-que en Android es `<filesDir>`, no `<filesDir>/game`, así que sin este paso el
-motor no encuentra el juego. Sitio natural para el enganche: el bloque
-`#ifndef WORKDIR_CURRENT` de `src/main.cpp` (unos 20 líneas antes de
-`mkxp_fs::setCurrentDirectory(dataDir)`), por ejemplo:
-
-```c
-#if defined(__ANDROID__)
-    char *env = getenv("MKXPZ_GAME_DIR");
-    if (env) {
-        strncpy(dataDir, env, sizeof(dataDir) - 1);
-    }
-#endif
-```
-
-Alternativa sin tocar el motor: copiar el árbol del juego directamente en
-`getFilesDir()` (sin subcarpeta `game`) para que `SDL_GetBasePath()` apunte al
-sitio correcto. Es un cambio de una línea en `GameDataInstaller.gameDir()`.
+El motor lee `MKXPZ_GAME_DIR` al inicio de `main()` (`src/main.cpp`, bloque
+`__ANDROID__`) y hace `chdir()` ahí antes de cargar `Data/`. En Android se compila
+con `WORKDIR_CURRENT`, así que esa carpeta es la raíz del juego.
 
 ## Configuración
 

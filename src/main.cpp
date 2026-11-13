@@ -222,6 +222,10 @@ int main(int argc, char *argv[]) {
 #ifdef __ANDROID__
     SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "1");
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+
+    // Set by MkxpActivity to the directory the launcher installed the game into.
+    if (const char *gameDir = getenv("MKXPZ_GAME_DIR"))
+        mkxp_fs::setCurrentDirectory(gameDir);
 #endif
 
 #ifdef GLES2_HEADER
