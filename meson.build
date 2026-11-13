@@ -115,7 +115,7 @@ if get_option('force32') == true
 endif
 
 build_static = false
-if get_option('static_executable') == true
+if get_option('static_executable') == true or host_system == 'android'
     build_static = true
 endif
 
@@ -190,6 +190,7 @@ if steamworks == true
 endif
 
 if host_system == 'android'
+    global_link_args += ['-Wl,--no-undefined', '-Wl,-z,max-page-size=16384']
     shared_library('main',
         sources: global_sources,
         dependencies: global_dependencies,

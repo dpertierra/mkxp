@@ -1,19 +1,26 @@
 physfs = dependency('physfs', version: '>=2.1', static: build_static)
 openal = dependency('openal', static: build_static, method: 'pkg-config')
-theora = dependency('theora', static: build_static)
+if host_system != 'android'
+    theora = dependency('theora', static: build_static)
+    global_dependencies += theora
+endif
 vorbisfile = dependency('vorbisfile', static: build_static)
 vorbis = dependency('vorbis', static: build_static)
 ogg = dependency('ogg', static: build_static)
 opusfile = dependency('opusfile', static: build_static)
 if host_system == 'android'
-    sdl2 = dependency('SDL2', version: '>=2.0.14', static: build_static)
+    sdl2 = dependency('sdl2', version: '>=2.0.14', static: false)
     foreach lib : ['log', 'android', 'GLESv2', 'EGL']
         global_dependencies += compilers['cpp'].find_library(lib)
     endforeach
 else
     sdl2 = dependency('SDL2', version: '>=2.0.9', static: build_static)
 endif
-sdl_sound = compilers['cpp'].find_library('SDL2_sound')
+if host_system == 'android'
+    sdl_sound = dependency('SDL2_sound', static: true)
+else
+    sdl_sound = compilers['cpp'].find_library('SDL2_sound')
+endif
 sdl2_ttf = dependency('SDL2_ttf', static: build_static)
 freetype = dependency('freetype2', static: build_static)
 pixman = dependency('pixman-1', static: build_static)
@@ -30,12 +37,18 @@ uchardet = dependency('uchardet', static: build_static)
 # building the sub project.
 # It looks like upstream SDL_image fixed this for SDL3, so we can hopefully
 # remove this workaround after eventually upgrading to SDL3.
-sdl2_image = dependency('SDL2_image', modules: ['SDL2_image::SDL2_image-static', 'SDL2_image::brotlidec-static', 'SDL2_image::brotlicommon-static', 'SDL2_image::hwy', 'SDL2_image::jxl_dec-static'], static: build_static, method: 'cmake', required: false)
-if sdl2_image.found() == false
-    sdl2_image = dependency('SDL2_image', modules: ['SDL2_image::SDL2_image-static', 'SDL2_image::brotlidec-static', 'SDL2_image::brotlicommon-static', 'SDL2_image::hwy', 'SDL2_image::jxl_dec-static'], static: build_static)
+if host_system == 'android'
+    sdl2_image = dependency('SDL2_image', static: true, method: 'pkg-config')
+else
+    sdl2_image = dependency('SDL2_image', modules: ['SDL2_image::SDL2_image-static', 'SDL2_image::brotlidec-static', 'SDL2_image::brotlicommon-static', 'SDL2_image::hwy', 'SDL2_image::jxl_dec-static'], static: build_static, method: 'cmake', required: false)
+    if sdl2_image.found() == false
+        sdl2_image = dependency('SDL2_image', modules: ['SDL2_image::SDL2_image-static', 'SDL2_image::brotlidec-static', 'SDL2_image::brotlicommon-static', 'SDL2_image::hwy', 'SDL2_image::jxl_dec-static'], static: build_static)
+    endif
 endif
 
-if host_system == 'windows'
+if host_system == 'android'
+    iconv = compilers['cpp'].find_library('iconv', static: true, dirs: sdl2.get_variable(pkgconfig: 'libdir'))
+elif host_system == 'windows'
     bz2 = dependency('bzip2', static: build_static)
     iconv = compilers['cpp'].find_library('iconv', static: build_static)
 else
@@ -44,6 +57,9 @@ else
     # installed in the system prefix somewhere
     iconv = compilers['cpp'].find_library('iconv')
     global_dependencies += compilers['cpp'].find_library('charset')
+endif
+if host_system != 'android'
+    global_dependencies += bz2
 endif
 
 # If OpenSSL is present, you get HTTPS support
@@ -104,12 +120,12 @@ global_include_dirs += include_directories('.',
     'util', 'util/sigslot', 'util/sigslot/adapter'
 )
 
-global_dependencies += [openal, zlib, bz2, sdl2, sdl_sound, pixman, physfs, theora, vorbisfile, vorbis, ogg, opusfile, sdl2_ttf, freetype, sdl2_image, png, iconv, uchardet]
+global_dependencies += [openal, zlib, sdl2, sdl_sound, pixman, physfs, vorbisfile, vorbis, ogg, opusfile, sdl2_ttf, freetype, sdl2_image, png, iconv, uchardet]
 if host_system == 'windows'
     global_dependencies += compilers['cpp'].find_library('wsock32')
 endif
 
-if get_option('shared_fluid') == true
+if get_option('shared_fluid') == true and host_system != 'android'
     fluidsynth = dependency('fluidsynth', static: build_static)
     add_project_arguments('-DSHARED_FLUID', language: 'cpp')
     global_dependencies += fluidsynth
@@ -138,7 +154,6 @@ main_source = files(
     'audio/soundemitter.cpp',
     'audio/opussource.cpp',
     'audio/vorbissource.cpp',
-    'theoraplay/theoraplay.c',
 
     'crypto/rgssad.cpp',
 
@@ -189,3 +204,6 @@ main_source = files(
 )
 
 global_sources += main_source
+if host_system != 'android'
+    global_sources += files('theoraplay/theoraplay.c')
+endif
