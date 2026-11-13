@@ -170,6 +170,89 @@ El motor lee `MKXPZ_GAME_DIR` al inicio de `main()` (`src/main.cpp`, bloque
 `__ANDROID__`) y hace `chdir()` ahí antes de cargar `Data/`. En Android se compila
 con `WORKDIR_CURRENT`, así que esa carpeta es la raíz del juego.
 
+## Controles táctiles
+
+`MkxpActivity` añade una capa de controles táctiles (`TouchControlsView`)
+encima de la superficie de SDL. Los toques se convierten en teclas de SDL
+(`SDLActivity.onNativeKeyDown`), así que el motor los recibe como entrada de
+teclado normal y los mapea con `src/input/keybindings.cpp`:
+
+| Botón | Keycode de Android | Scancode de SDL | Input:: (RGSS 1) | Input:: (RGSS 2+) |
+|---|---|---|---|---|
+| Cruceta arriba/abajo/izquierda/derecha | `KEYCODE_DPAD_*` | `UP`/`DOWN`/`LEFT`/`RIGHT` | `Up`/`Down`/`Left`/`Right` | igual |
+| C | `KEYCODE_C` | `C` | `Input::C` (confirmar) | — |
+| X | `KEYCODE_X` | `X` | `Input::B` (cancelar, menú) | igual |
+| Z | `KEYCODE_Z` | `Z` | `Input::A` (acción, correr) | `Input::C` (confirmar) |
+| A | `KEYCODE_A` | `A` | `Input::X` | igual |
+| S | `KEYCODE_S` | `S` | `Input::Y` | igual |
+| D | `KEYCODE_D` | `D` | `Input::Z` (menú rápido) | igual |
+| Q | `KEYCODE_Q` | `Q` | `Input::L` | igual |
+| W | `KEYCODE_W` | `W` | `Input::R` | igual |
+| Alt | `KEYCODE_ALT_LEFT` | `LALT` | `Input::Alt` | igual |
+| Enter | `KEYCODE_ENTER` | `RETURN` | `Input::C` | igual |
+
+El motor detecta la versión de RGSS del juego (`src/config.cpp`): si el juego
+usa `Data/Scripts.rxdata` se trata como RGSS 1 y la tecla Z es la de acción;
+con `.rvdata`/`.rvdata2` (RGSS 2 y 3) Z es la de confirmar.
+
+Detalles del comportamiento:
+
+- La cruceta acepta diagonales (pulsa dos teclas a la vez) y se puede deslizar
+  el dedo de una dirección a otra sin soltar.
+- Multitáctil: la cruceta y los botones se pueden usar a la vez; las teclas se
+  sueltan al levantar el dedo, al cancelar el gesto y al pausar la app.
+- Las teclas que no caen en un control no se consumen: la superficie de SDL
+  las sigue recibiendo (el juego las usa como ratón).
+- La cruceta y los botones se dibujan en las barras laterales que deja el
+  juego (el motor mantiene su proporción 4:3). En vertical se colocan en la
+  franja negra bajo la pantalla del juego.
+- El pad se oculta solo cuando se usa un teclado o un mando físico, y vuelve
+  a aparecer al tocar la pantalla.
+- El teclado de Android funciona en los campos de texto del juego: escribir,
+  borrar (la tecla de borrar del teclado se reenvía al motor) y confirmar con
+  Enter (el teclado se cierra y se envía la tecla Intro).
+
+### Layout propio por juego
+
+Un juego puede traer su propio layout en `<gameDir>/android_controls.json`
+(`<gameDir>` es la carpeta que `MkxpActivity` publica como `MKXPZ_GAME_DIR`).
+Si el archivo no existe o no es válido se usa el layout por defecto y se avisa
+en el log (`adb logcat -s TouchControls`).
+
+```json
+{
+  "buttons": [
+    {"label": "Z", "key": "Z", "x": 0.855, "y": 0.870, "size": 0.145},
+    {"label": "X", "key": "X", "x": 0.951, "y": 0.870, "size": 0.145},
+    {"label": "Esc", "key": "ESCAPE", "x": 0.855, "y": 0.130, "size": 0.145}
+  ],
+  "dpad": {"x": 0.115, "y": 0.740, "size": 0.300},
+  "toggle": {"label": "≡", "x": 0.945, "y": 0.465, "size": 0.075}
+}
+```
+
+| Clave | Qué es |
+|---|---|
+| `buttons` | Lista de botones. Obligatoria. |
+| `buttons[].label` | Texto que se dibuja en el botón. |
+| `buttons[].key` | Nombre de una constante `KeyEvent.KEYCODE_*` sin el prefijo (`"Z"`, `"DPAD_UP"`, `"SHIFT_LEFT"`, `"ESCAPE"`...). Una clave desconocida se avisa en el log y el botón se descarta. |
+| `buttons[].x` | Centro del botón, como fracción del ancho de la pantalla (0 a 1). |
+| `buttons[].y` | Centro del botón, como fracción del alto de la pantalla (0 a 1). |
+| `buttons[].size` | Diámetro del botón, como fracción del lado más corto de la pantalla. |
+| `buttons[].secondary` | Opcional. `true` lo esconde hasta que se pulse el botón de la izquierda. |
+| `dpad` | La cruceta. `false` la oculta; con un objeto se indica su posición y tamaño. Si no se menciona, se usa la de por defecto. |
+| `toggle` | Botón que muestra y esconde los botones marcados como `secondary`. Opcional. |
+
+El layout por defecto pone las teclas como en un teclado de PC:
+
+```
+    Q W
+  A S D
+  Z X C Alt
+```
+
+con la cruceta a la izquierda.
+
 ## Configuración
 
 | Qué | Cómo | Por defecto |
