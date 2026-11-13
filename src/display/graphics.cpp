@@ -41,7 +41,9 @@
 #include "shader.h"
 #include "sharedstate.h"
 #include "texpool.h"
+#ifndef __ANDROID__
 #include "theoraplay/theoraplay.h"
+#endif
 #include "util.h"
 #include "input.h"
 #include "sprite.h"
@@ -75,6 +77,7 @@
 
 #define DEF_FRAMERATE (rgssVer == 1 ? 40 : 60)
 
+#ifndef __ANDROID__
 #define DEF_MAX_VIDEO_FRAMES 30
 #define VIDEO_DELAY 10
 #define MOVIE_AUDIO_BUFFER_SIZE 2048
@@ -441,6 +444,8 @@ struct MovieOpenHandler : FileSystem::OpenHandler
         return true;
     }
 };
+
+#endif
 
 struct PingPong {
     TEXFBO rt[2];
@@ -1564,6 +1569,9 @@ bool Graphics::updateMovieInput(Movie *movie) {
 }
 
 void Graphics::playMovie(const char *filename, int volume_, bool skippable) {
+#ifdef __ANDROID__
+    throw Exception(Exception::MKXPError, "Movie playback is not available on Android");
+#else
     if (shState->config().enableHires) {
         Debug() << "BUG: High-res Graphics playMovie not implemented";
     }
@@ -1596,6 +1604,7 @@ void Graphics::playMovie(const char *filename, int volume_, bool skippable) {
     }
     
     delete movie;
+#endif
 }
 
 void Graphics::screenshot(const char *filename) {

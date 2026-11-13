@@ -11,7 +11,7 @@ regenerated from source, never committed.
 
 - Android NDK r26+ (default `$HOME/Android/Sdk/ndk/30.0.16248370`, override with
   `ANDROID_NDK_HOME` or `NDK=/path`), API 26, `arm64-v8a`.
-- Host tools: `cmake`, `make`, `git`, `pkg-config`, autoconf/automake/libtool
+- Host tools: `cmake`, `make`, `git`, `curl`, `sha256sum`, `pkg-config`, autoconf/automake/libtool
   (for libogg and Ruby), `patch`-capable `sed`.
 - Host Ruby for cross-building MRI (`BASERUBY`, defaults to `ruby` on `PATH`).
   It must also provide the `erb` library: Ruby's own build scripts
@@ -29,11 +29,22 @@ make -C android/deps deps-core  # everything except Ruby
 make -C android/deps sdl2 libpng
 ```
 
+If a prefix from the initial dependency build already exists, only add the
+libraries the engine also needs (no Ruby/SDL rebuild):
+
+```sh
+make -C android/deps libopusfile pixman uchardet iconv \
+  BUILD_PREFIX=/absolute/path/to/build-arm64 \
+  DOWNLOADS=/absolute/path/to/existing/downloads/arm64
+```
+
+Keep `DOWNLOADS` pointing at the existing source/build trees when reusing a
+prefix; the Makefile's order-only configure prerequisites still need them.
+
 Then, for the engine build:
 
 ```sh
-source android/deps/vars.sh
-meson setup --cross-file <android cross file> <builddir>
+./android/build-native.sh
 ```
 
 `vars.sh` points `PKG_CONFIG_LIBDIR` at `build-arm64/lib/pkgconfig` and clears
@@ -47,6 +58,10 @@ meson setup --cross-file <android cross file> <builddir>
 | libpng 1.6.50 | `libpng.a`, `libpng16.a` | CMake; `libpng.pc` symlinked to `libpng16.pc` |
 | libogg 1.3.6 | `libogg.a` | autotools |
 | libvorbis 1.3.7 | `libvorbis.a`, `libvorbisfile.a`, `libvorbisenc.a` | against our libogg |
+| Opus 1.5.2 + opusfile 0.12 | `libopus.a`, `libopusfile.a` | streaming audio and sound effects; opusfile HTTP off |
+| Pixman 0.42.2 | `libpixman-1.a` | bitmap regions; GTK/PNG/OpenMP off; AArch64 assembly off because its GNU assembler directives fail with NDK Clang |
+| uchardet 0.0.8 | `libuchardet.a` | charset detection; `.pc` corrected to link `c++_shared`, not Android's system `stdc++` stub |
+| GNU libiconv 1.18 | `libiconv.a` | legacy text conversion on API 26; no dependency on API 28's bionic iconv |
 | FreeType (mkxp-z fork) | `libfreetype.a` | CMake; harfbuzz/bzip2/brotli off, PNG on. CMake does not install a `.pc`, so `freetype2.pc` is generated (version hardcoded, keep in sync with the branch) |
 | PhysFS 3.2.0 | `libphysfs.a` | static, no test/docs |
 | SDL2 (mkxp-z fork, mkxp-z-2.28.1) | **`libSDL2.so` (shared)** | SDLActivity `System.loadLibrary`s it, so shared is correct here; only SDL2 is shared |

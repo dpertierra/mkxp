@@ -12,9 +12,9 @@
 #
 set -euo pipefail
 
-SDL_VERSION="2.30.12"
+SDL_VERSION="2.28.1"
 SDL_TAG="release-${SDL_VERSION}"
-SDL_SHA256="ac356ea55e8b9dd0b2d1fa27da40ef7e238267ccf9324704850d5d47375b48ea"
+SDL_SHA256="4977ceba5c0054dbe6c2f114641aced43ce3bf2b41ea64b6a372d6ba129cb15d"
 SDL_URL="https://github.com/libsdl-org/SDL/releases/download/${SDL_TAG}/SDL2-${SDL_VERSION}.tar.gz"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
