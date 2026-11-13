@@ -63,6 +63,9 @@ extern "C" {
 #include <SDL_filesystem.h>
 #include <SDL_loadso.h>
 #include <SDL_power.h>
+#ifdef __ANDROID__
+#include <SDL_misc.h>
+#endif
 
 extern const char module_rpg1[];
 extern const char module_rpg2[];
@@ -120,6 +123,7 @@ RB_METHOD(mkxpPlatform);
 RB_METHOD(mkxpIsMacHost);
 RB_METHOD(mkxpIsWindowsHost);
 RB_METHOD(mkxpIsLinuxHost);
+RB_METHOD(mkxpIsAndroidHost);
 RB_METHOD(mkxpIsUsingRosetta);
 RB_METHOD(mkxpIsUsingWine);
 RB_METHOD(mkxpIsReallyMacHost);
@@ -232,6 +236,7 @@ static void mriBindingInit() {
     _rb_define_module_function(mod, "is_rosetta?", mkxpIsUsingRosetta);
     
     _rb_define_module_function(mod, "is_linux?", mkxpIsLinuxHost);
+    _rb_define_module_function(mod, "is_android?", mkxpIsAndroidHost);
     
     _rb_define_module_function(mod, "is_windows?", mkxpIsWindowsHost);
     _rb_define_module_function(mod, "is_wine?", mkxpIsUsingWine);
@@ -427,6 +432,8 @@ RB_METHOD(mkxpPlatform) {
                 break;
         }
     }
+#elif MKXPZ_PLATFORM == MKXPZ_PLATFORM_ANDROID
+    std::string platform("Android");
 #else
     std::string platform("Linux");
 #endif
@@ -450,6 +457,12 @@ RB_METHOD(mkxpIsLinuxHost) {
     RB_UNUSED_PARAM;
     
     return rb_bool_new(MKXPZ_PLATFORM == MKXPZ_PLATFORM_LINUX);
+}
+
+RB_METHOD(mkxpIsAndroidHost) {
+    RB_UNUSED_PARAM;
+
+    return rb_bool_new(MKXPZ_PLATFORM == MKXPZ_PLATFORM_ANDROID);
 }
 
 RB_METHOD(mkxpIsWindowsHost) {
@@ -647,10 +660,10 @@ RB_METHOD_GUARD_END
 #ifdef __APPLE__
 #define OPENCMD "open "
 #define OPENARGS "--args"
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(__ANDROID__)
 #define OPENCMD "xdg-open "
 #define OPENARGS ""
-#else
+#elif !defined(__ANDROID__)
 #define OPENCMD "start /b \"launch\" "
 #define OPENARGS ""
 #endif
@@ -662,7 +675,13 @@ RB_METHOD_GUARD(mkxpLaunch) {
     
     rb_scan_args(argc, argv, "11", &cmdname, &args);
     SafeStringValue(cmdname);
-    
+
+#ifdef __ANDROID__
+    if (args != RUBY_Qnil)
+        Debug() << "System.launch: Arguments are not supported on Android. Ignoring.";
+    if (SDL_OpenURL(RSTRING_PTR(cmdname)) != 0)
+        throw Exception(Exception::MKXPError, "Failed to launch \"%s\"", RSTRING_PTR(cmdname));
+#else
     std::string command(OPENCMD);
     command += "\""; command += RSTRING_PTR(cmdname); command += "\"";
     
@@ -690,6 +709,7 @@ RB_METHOD_GUARD(mkxpLaunch) {
     if (std::system(command.c_str()) != 0) {
         throw Exception(Exception::MKXPError, "Failed to launch \"%s\"", RSTRING_PTR(cmdname));
     }
+#endif
     
     return RUBY_Qnil;
 }

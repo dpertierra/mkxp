@@ -607,6 +607,9 @@ struct MsBinding : public Binding
 /* Not rebindable */
 static const KbBindingData staticKbBindings[] =
 {
+#ifdef __ANDROID__
+    { SDL_SCANCODE_AC_BACK, Input::B     },
+#endif
     { SDL_SCANCODE_LSHIFT, Input::Shift },
     { SDL_SCANCODE_RSHIFT, Input::Shift },
     { SDL_SCANCODE_LCTRL,  Input::Ctrl  },
