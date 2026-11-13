@@ -34,7 +34,6 @@ CC := $(TOOLCHAIN)/bin/$(TARGET)$(API)-clang
 CXX := $(TOOLCHAIN)/bin/$(TARGET)$(API)-clang++
 AR := $(TOOLCHAIN)/bin/llvm-ar
 RANLIB := $(TOOLCHAIN)/bin/llvm-ranlib
-STRIP := $(TOOLCHAIN)/bin/llvm-strip
 
 OPENAL_FLAGS := -DALSOFT_CPUEXT_NEON=no ${OPENAL_FLAGS}
 RUBY_FLAGS := ${RUBY_FLAGS}
@@ -74,7 +73,6 @@ CMAKE_ARGS := \
 	-DCMAKE_BUILD_TYPE=Release
 
 CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
-AUTOGEN   := $(CONFIGURE_ENV) ./autogen.sh $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake -G "Unix Makefiles" .. $(CMAKE_ARGS)
 
 # Host interpreter used to generate sources for the target build. Required for
@@ -84,9 +82,9 @@ BASERUBY ?= $(shell command -v ruby)
 
 # Ruby's build scripts (tool/insns2vm.rb, tool/generic_erb.rb) need the `erb`
 # library, but configure appends --disable=gems to BASERUBY so user/bundled gems
-# are not visible. Find erb through rubygems here and hand its lib dir to the
-# build via RUBYLIB. Host ruby without erb -> install it (`gem install erb`,
-# or the distro's ruby-erb package).
+# are not visible. Resolve erb through rubygems here and add its lib dir to
+# --with-baseruby; host ruby without erb -> `gem install erb` (or the distro's
+# ruby-erb package).
 ERB_LIB := $(shell $(BASERUBY) -e 'begin; require "erb"; print File.dirname($$LOADED_FEATURES.grep(%r{/erb\.rb$$}).first); rescue LoadError; end' 2>/dev/null)
 
 RUBY_CONFIGURE_ARGS := \
@@ -274,7 +272,13 @@ sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
 $(LIBDIR)/libSDL2_ttf.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libfreetype.a $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/sdl2_ttf/cmakebuild; \
-	make -j$(NPROC); make install
+	make -j$(NPROC); make install; \
+	pc=$(LIBDIR)/pkgconfig/SDL2_ttf.pc; \
+	sed -i -e 's/^Version:.*/Version: 2.0.15/' \
+	       -e 's/^Requires:.*/Requires: sdl2 >= 2.0.0/' "$$pc"; \
+	grep -q '^Requires.private:' "$$pc" || \
+	  sed -i '/^Requires:/a Requires.private: freetype2' "$$pc"; \
+	echo "patched SDL2_ttf.pc: freetype2 is a static dependency"
 
 $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt
 	@# The mkxp-z sdl_ttf fork assumes the SDL Android.mk flow (vendored freetype)
