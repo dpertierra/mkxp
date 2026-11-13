@@ -18,11 +18,13 @@ La meta es conservar las APIs que Essentials necesita para arrancar, jugar y gua
 - Dependencias: SDL2, SDL_image, SDL_ttf, SDL_sound, OpenAL, PhysFS, FreeType, Vorbis/Ogg, Theora, FluidSynth (opcional), OpenSSL (HTTPS), MRI Ruby 3.1 (`mri_version`).
 - Hay ports comunitarios experimentales de MKXP-Z a Android (p.ej. `thehatkid/mkxp-z-android`): prueban viabilidad, no compatibilidad con La Base de Sky.
 
-**Pendiente de confirmar:** versión exacta de Ruby que usa el ejecutable de referencia de la base; si algún plugin necesita MiniFFI/Win32API o extensiones nativas; si el port comunitario es reutilizable (licencia, estado, versión de MKXP-Z).
+**Decisión:** port propio desde cero sobre este repo. No se parte de ports comunitarios; así el código Android convive con los cambios propios del motor (perspectiva 2.5D, vibración de mandos, etc.) sin rebases contra un fork ajeno.
 
-## Fase 0 — Decidir estrategia y preparar entorno
+**Pendiente de confirmar:** versión exacta de Ruby que usa el ejecutable de referencia de la base; si algún plugin necesita MiniFFI/Win32API o extensiones nativas.
 
-1. Evaluar el port comunitario: ¿fork/rebase sobre este repo o port propio? Criterio: cuánto diverge de nuestro MKXP-Z (perspectiva 2.5D, vibración de mandos, etc.).
+## Fase 0 — Preparar entorno
+
+1. Partir de `main` de este repo; todo el trabajo Android en esta rama.
 2. Fijar NDK (r26+), API mínima, ABI `arm64-v8a`, versión de SDL2.
 3. Estructura: proyecto Gradle en `android/` (wrapper Java/Kotlin basado en `SDLActivity`) + build nativo con Meson cross-file para NDK.
 4. Mantener el port en esta rama; no cambiar defaults de Windows/Linux/macOS.
