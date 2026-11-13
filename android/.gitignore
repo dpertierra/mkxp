@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Prebuilt native libraries (cross-compiled with Meson + NDK, see README.md)
+app/src/main/jniLibs/
+
+# SDL2 Java glue (org.libsdl.app) fetched by ./fetch-sdl-java.sh
+app/src/main/java/org/libsdl/
+
+# Game data shipped inside the APK (assets/game) and its version marker
+app/src/main/assets/game/
+app/src/main/assets/game.version
+
+# Local SDK location
+local.properties

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fullscreen, no title bar: the game owns the whole screen. -->
+    <style name="GameTheme" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+
+    <!-- Shown while the game data is installed. -->
+    <style name="SplashTheme" parent="@android:style/Theme.NoTitleBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
