@@ -514,15 +514,18 @@ endef
 # but does not put those objects in libruby-static.a, which ships dmyext.o (an
 # empty Init_ext) instead of ext/extinit.o. Merge every ext archive plus
 # extinit.o into one libruby-ext.a and drop dmyext.o, so `require "zlib"` etc.
-# resolve to the statically linked extensions.
+# resolve to the statically linked extensions. Objects are renamed per archive
+# because several extensions ship the same object name (e.g. parser.o).
 define merge_ruby_ext
 	rm -rf $(DOWNLOADS)/ruby/.extmerge; \
 	mkdir -p $(DOWNLOADS)/ruby/.extmerge; \
-	for a in $$(find $(DOWNLOADS)/ruby/ext -name '*.a'); do \
-	  ( cd $(DOWNLOADS)/ruby/.extmerge && $(AR) x "$$a" ); \
+	i=0; for a in $$(find $(DOWNLOADS)/ruby/ext -name '*.a'); do \
+	  i=$$((i+1)); d=$(DOWNLOADS)/ruby/.extmerge/x$$i; mkdir -p $$d; \
+	  ( cd $$d && $(AR) x "$$a" && for o in *.o; do mv "$$o" "../$$i-$$o"; done ); \
+	  rmdir $$d; \
 	done; \
 	cp $(DOWNLOADS)/ruby/ext/extinit.o $(DOWNLOADS)/ruby/.extmerge/; \
-	$(AR) d $(LIBDIR)/libruby-static.a dmyext.o; \
+	$(AR) d $(LIBDIR)/libruby-static.a dmyext.o 2>/dev/null || true; \
 	rm -f $(LIBDIR)/libruby-ext.a; \
 	$(AR) rcs $(LIBDIR)/libruby-ext.a $(DOWNLOADS)/ruby/.extmerge/*.o; \
 	rm -rf $(DOWNLOADS)/ruby/.extmerge; \
