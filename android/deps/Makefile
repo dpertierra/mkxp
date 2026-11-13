@@ -77,6 +77,18 @@ CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 AUTOGEN   := $(CONFIGURE_ENV) ./autogen.sh $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake -G "Unix Makefiles" .. $(CMAKE_ARGS)
 
+# Host interpreter used to generate sources for the target build. Required for
+# cross-compiling MRI; a host ruby >= 2.7 is enough. Must be defined before
+# RUBY_CONFIGURE_ARGS (immediately expanded), or --with-baseruby ends up empty.
+BASERUBY ?= $(shell command -v ruby)
+
+# Ruby's build scripts (tool/insns2vm.rb, tool/generic_erb.rb) need the `erb`
+# library, but configure appends --disable=gems to BASERUBY so user/bundled gems
+# are not visible. Find erb through rubygems here and hand its lib dir to the
+# build via RUBYLIB. Host ruby without erb -> install it (`gem install erb`,
+# or the distro's ruby-erb package).
+ERB_LIB := $(shell $(BASERUBY) -e 'begin; require "erb"; print File.dirname($$LOADED_FEATURES.grep(%r{/erb\.rb$$}).first); rescue LoadError; end' 2>/dev/null)
+
 RUBY_CONFIGURE_ARGS := \
 	--enable-install-static-library \
 	--disable-shared \
@@ -85,11 +97,8 @@ RUBY_CONFIGURE_ARGS := \
 	--with-static-linked-ext \
 	--disable-rubygems \
 	--without-gmp \
-	--with-baseruby="$(BASERUBY)"
-
-# Host interpreter used to generate sources for the target build. Required for
-# cross-compiling MRI; a host ruby >= 2.7 is enough.
-BASERUBY ?= $(shell command -v ruby)
+	--with-opt-dir="$(BUILD_PREFIX)" \
+	--with-baseruby="$(BASERUBY)$(if $(ERB_LIB), -I$(ERB_LIB))"
 
 default: everything
 
@@ -100,18 +109,19 @@ check-toolchain:
 		echo "Set ANDROID_NDK_HOME or NDK=/path/to/ndk"; exit 1; }
 	@test -x "$(CC)" || { echo "Missing cross compiler: $(CC)"; exit 1; }
 	@test -n "$(BASERUBY)" || echo "warning: no host ruby, 'ruby' target will fail (needs --with-baseruby)"
+	@test -n "$(ERB_LIB)" || echo "warning: host ruby has no erb; 'ruby' target will fail (gem install erb)"
 
 # zlib
 zlib: init_dirs check-toolchain $(LIBDIR)/libz.a
 
 $(LIBDIR)/libz.a: $(DOWNLOADS)/zlib/cmakebuild/Makefile
-	cd $(DOWNLOADS)/zlib/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/zlib/cmakebuild; \
 	make -j$(NPROC); make install; \
 	rm -f $(LIBDIR)/libz.so $(LIBDIR)/libz.so.*; \
 	$(call pc_fixup)
 
 $(DOWNLOADS)/zlib/cmakebuild/Makefile: $(DOWNLOADS)/zlib/CMakeLists.txt
-	cd $(DOWNLOADS)/zlib; \
+	set -e; cd $(DOWNLOADS)/zlib; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DBUILD_SHARED_LIBS=off -DZLIB_BUILD_EXAMPLES=off \
 	-DINSTALL_PKGCONFIG_DIR="$(LIBDIR)/pkgconfig"
@@ -123,13 +133,13 @@ $(DOWNLOADS)/zlib/CMakeLists.txt:
 libpng: init_dirs zlib $(LIBDIR)/libpng.a
 
 $(LIBDIR)/libpng.a: $(LIBDIR)/libz.a $(DOWNLOADS)/libpng/cmakebuild/Makefile
-	cd $(DOWNLOADS)/libpng/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/libpng/cmakebuild; \
 	make -j$(NPROC); make install; \
 	cd $(LIBDIR)/pkgconfig; \
 	test -e libpng.pc || ln -sf libpng16.pc libpng.pc
 
 $(DOWNLOADS)/libpng/cmakebuild/Makefile: $(DOWNLOADS)/libpng/CMakeLists.txt
-	cd $(DOWNLOADS)/libpng; \
+	set -e; cd $(DOWNLOADS)/libpng; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) \
 	-DPNG_SHARED=off -DPNG_STATIC=on -DPNG_TESTS=off -DPNG_TOOLS=off \
@@ -142,15 +152,15 @@ $(DOWNLOADS)/libpng/CMakeLists.txt:
 libogg: init_dirs check-toolchain $(LIBDIR)/libogg.a
 
 $(LIBDIR)/libogg.a: $(DOWNLOADS)/ogg/Makefile
-	cd $(DOWNLOADS)/ogg; \
+	set -e; cd $(DOWNLOADS)/ogg; \
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/ogg/Makefile: $(DOWNLOADS)/ogg/configure
-	cd $(DOWNLOADS)/ogg; \
+	set -e; cd $(DOWNLOADS)/ogg; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
 
 $(DOWNLOADS)/ogg/configure: $(DOWNLOADS)/ogg/configure.ac
-	cd $(DOWNLOADS)/ogg; ./autogen.sh
+	set -e; cd $(DOWNLOADS)/ogg; ./autogen.sh
 
 $(DOWNLOADS)/ogg/configure.ac:
 	$(CLONE) $(GITHUB)/xiph/ogg -b v1.3.6 $(DOWNLOADS)/ogg
@@ -159,11 +169,11 @@ $(DOWNLOADS)/ogg/configure.ac:
 libvorbis: init_dirs libogg $(LIBDIR)/libvorbis.a
 
 $(LIBDIR)/libvorbis.a: $(LIBDIR)/libogg.a $(DOWNLOADS)/vorbis/cmakebuild/Makefile
-	cd $(DOWNLOADS)/vorbis/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/vorbis/cmakebuild; \
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/vorbis/cmakebuild/Makefile: $(DOWNLOADS)/vorbis/CMakeLists.txt
-	cd $(DOWNLOADS)/vorbis; \
+	set -e; cd $(DOWNLOADS)/vorbis; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DBUILD_SHARED_LIBS=no \
 	-DOGG_INCLUDE_DIR="$(INCLUDEDIR)" -DOGG_LIBRARY="$(LIBDIR)/libogg.a"
@@ -177,13 +187,13 @@ $(DOWNLOADS)/vorbis/CMakeLists.txt:
 freetype: init_dirs libpng $(LIBDIR)/libfreetype.a
 
 $(LIBDIR)/libfreetype.a: $(LIBDIR)/libpng.a $(DOWNLOADS)/freetype/cmakebuild/Makefile
-	cd $(DOWNLOADS)/freetype/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/freetype/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/freetype2.pc || \
 	$(call write_pc,freetype2,2.13.0,freetype,-lz -lpng16,/freetype2,)
 
 $(DOWNLOADS)/freetype/cmakebuild/Makefile: $(DOWNLOADS)/freetype/CMakeLists.txt
-	cd $(DOWNLOADS)/freetype; \
+	set -e; cd $(DOWNLOADS)/freetype; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) \
 	-DBUILD_SHARED_LIBS=off \
@@ -199,11 +209,11 @@ $(DOWNLOADS)/freetype/CMakeLists.txt:
 physfs: init_dirs check-toolchain $(LIBDIR)/libphysfs.a
 
 $(LIBDIR)/libphysfs.a: $(DOWNLOADS)/physfs/cmakebuild/Makefile
-	cd $(DOWNLOADS)/physfs/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/physfs/cmakebuild; \
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/physfs/cmakebuild/Makefile: $(DOWNLOADS)/physfs/CMakeLists.txt
-	cd $(DOWNLOADS)/physfs; \
+	set -e; cd $(DOWNLOADS)/physfs; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DPHYSFS_BUILD_STATIC=on -DPHYSFS_BUILD_SHARED=off \
 	-DPHYSFS_BUILD_TEST=off -DPHYSFS_BUILD_DOCS=off
@@ -220,11 +230,11 @@ $(LIBDIR)/libSDL2.so: $(DOWNLOADS)/sdl2/cmakebuild/Makefile
 	  sed -i 's/ALooper_pollAll/ALooper_pollOnce/g' \
 	    $(DOWNLOADS)/sdl2/src/sensor/android/SDL_androidsensor.c; \
 	  echo "patched SDL_androidsensor.c: ALooper_pollAll -> ALooper_pollOnce"; fi
-	cd $(DOWNLOADS)/sdl2/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl2/cmakebuild; \
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/sdl2/cmakebuild/Makefile: $(DOWNLOADS)/sdl2/CMakeLists.txt
-	cd $(DOWNLOADS)/sdl2; \
+	set -e; cd $(DOWNLOADS)/sdl2; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DBUILD_SHARED_LIBS=on -DSDL_SHARED=on -DSDL_STATIC=off \
 	-DSDL_TESTS=off -DSDL_DBUS=off
@@ -238,13 +248,13 @@ $(DOWNLOADS)/sdl2/CMakeLists.txt:
 sdl2image: init_dirs sdl2 libpng $(LIBDIR)/libSDL2_image.a
 
 $(LIBDIR)/libSDL2_image.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libpng.a $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile
-	cd $(DOWNLOADS)/sdl2_image/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl2_image/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/SDL2_image.pc || \
 	$(call write_pc,SDL2_image,2.6.3,SDL2_image,,,sdl2)
 
 $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.txt
-	cd $(DOWNLOADS)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) \
 	-DBUILD_SHARED_LIBS=off \
 	-DSDL2IMAGE_VENDORED=on \
@@ -256,14 +266,14 @@ $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.
 
 $(DOWNLOADS)/sdl2_image/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/mkxp-z/SDL_image $(DOWNLOADS)/sdl2_image -b mkxp-z; \
-	cd $(DOWNLOADS)/sdl2_image; \
+	set -e; cd $(DOWNLOADS)/sdl2_image; \
 	./external/download.sh
 
 # SDL2 (ttf)
 sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
 $(LIBDIR)/libSDL2_ttf.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libfreetype.a $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile
-	cd $(DOWNLOADS)/sdl2_ttf/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl2_ttf/cmakebuild; \
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt
@@ -274,7 +284,7 @@ $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt
 	  sed -i '0,/^if (ANDROID)$$/s//if (FALSE) # android\/deps: use cross SDL2+freetype/' \
 	    $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt; \
 	  echo "patched sdl2_ttf/CMakeLists.txt: skip Android.mk path"; fi
-	cd $(DOWNLOADS)/sdl2_ttf; mkdir -p cmakebuild; cd cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl2_ttf; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DBUILD_SHARED_LIBS=off \
 	-DFREETYPE_INCLUDE_DIRS="$(INCLUDEDIR)/freetype2" \
 	-DFREETYPE_LIBRARY="$(LIBDIR)/libfreetype.a" \
@@ -287,13 +297,13 @@ $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt:
 sdlsound: init_dirs sdl2 libogg libvorbis $(LIBDIR)/libSDL2_sound.a
 
 $(LIBDIR)/libSDL2_sound.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libvorbis.a $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile
-	cd $(DOWNLOADS)/sdl_sound/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl_sound/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/SDL2_sound.pc || \
 	$(call write_pc,SDL2_sound,2.0.1,SDL2_sound,-lm,,sdl2)
 
 $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile: $(DOWNLOADS)/sdl_sound/CMakeLists.txt
-	cd $(DOWNLOADS)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
+	set -e; cd $(DOWNLOADS)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) \
 	-DSDLSOUND_BUILD_SHARED=off \
 	-DSDLSOUND_BUILD_TEST=off \
@@ -314,11 +324,11 @@ $(DOWNLOADS)/sdl_sound/CMakeLists.txt:
 openal: init_dirs check-toolchain $(LIBDIR)/libopenal.a
 
 $(LIBDIR)/libopenal.a: $(DOWNLOADS)/openal/cmakebuild/Makefile
-	cd $(DOWNLOADS)/openal/cmakebuild; \
+	set -e; cd $(DOWNLOADS)/openal/cmakebuild; \
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/openal/cmakebuild/Makefile: $(DOWNLOADS)/openal/CMakeLists.txt
-	cd $(DOWNLOADS)/openal; mkdir -p cmakebuild; cd cmakebuild; \
+	set -e; cd $(DOWNLOADS)/openal; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DLIBTYPE=STATIC -DALSOFT_EXAMPLES=off -DALSOFT_UTILS=off -DALSOFT_TESTS=off \
 	-DALSOFT_BACKEND_OPENSL=on \
 	-DALSOFT_BACKEND_ALSA=off -DALSOFT_BACKEND_PULSEAUDIO=off \
@@ -336,18 +346,23 @@ $(DOWNLOADS)/openal/CMakeLists.txt:
 ruby: init_dirs zlib $(LIBDIR)/libruby-static.a
 
 $(LIBDIR)/libruby-static.a: $(LIBDIR)/libz.a $(DOWNLOADS)/ruby/Makefile
-	cd $(DOWNLOADS)/ruby; \
-	make -j$(NPROC); make install; \
+	@test -n "$(ERB_LIB)" || { \
+	  echo "host ruby has no erb: install it (gem install erb) and retry"; exit 1; }
+	set -e; cd $(DOWNLOADS)/ruby; \
+	make -j$(NPROC); \
+	make install; \
+	$(call merge_ruby_ext); \
 	$(call write_ruby_pc)
 
 $(DOWNLOADS)/ruby/Makefile: $(DOWNLOADS)/ruby/configure
-	cd $(DOWNLOADS)/ruby; \
+	set -e; cd $(DOWNLOADS)/ruby; \
 	export $(CONFIGURE_ENV); \
+	export RUBYLIB="$(ERB_LIB)$${RUBYLIB:+:$$RUBYLIB}"; \
 	export CFLAGS="-std=gnu99 $$CFLAGS"; \
 	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) $(RUBY_FLAGS)
 
 $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
-	cd $(DOWNLOADS)/ruby; autoreconf -i
+	set -e; cd $(DOWNLOADS)/ruby; autoreconf -i
 
 $(DOWNLOADS)/ruby/configure.ac:
 	$(CLONE) $(GITHUB)/mkxp-z/ruby $(DOWNLOADS)/ruby --single-branch --branch mkxp-z-3.1.3 --depth 1
@@ -387,9 +402,12 @@ define write_pc
 	  > $(LIBDIR)/pkgconfig/$(1).pc
 endef
 
-# Same, but the Cflags include path is discovered at recipe time (Ruby 3.1.0).
+# Same, but the include paths are discovered at recipe time (Ruby installs
+# headers in ruby-3.1.0/ and the arch-specific config.h in a sibling dir).
 define write_ruby_pc
 	mkdir -p $(LIBDIR)/pkgconfig; \
+	hdr=$$(ls $(INCLUDEDIR) | grep '^ruby-3\.' | head -1); \
+	arch=$$(ls $(INCLUDEDIR)/$$hdr | grep -v '\.' | head -1); \
 	printf '%s\n' \
 	  'prefix=$(BUILD_PREFIX)' \
 	  'exec_prefix=$${prefix}' \
@@ -400,9 +418,25 @@ define write_ruby_pc
 	  'Description: MRI Ruby 3.1 for Android arm64 (static, cross-built by android/deps/Makefile)' \
 	  'Version: 3.1.3' \
 	  'Libs: -L$${libdir} -lruby-static' \
-	  'Libs.private: -lm -ldl' \
-	  'Cflags: -I$${includedir}/'"$$(ls $(INCLUDEDIR) | grep '^ruby-3\.' | head -1)" \
+	  'Libs.private: -lruby-ext -lz -lm -ldl -llog' \
+	  'Cflags: -I$${includedir}/'"$$hdr"' -I$${includedir}/'"$$hdr"'/'"$$arch" \
 	  > $(LIBDIR)/pkgconfig/ruby-3.1.pc
+endef
+
+# --with-static-linked-ext compiles every extension into its own ext/**/<ext>.a
+# but does not put those objects in libruby-static.a. extinit.o (inside the
+# archive) references Init_<ext>, so the engine link needs them: merge every ext
+# archive into one libruby-ext.a next to libruby-static.a.
+define merge_ruby_ext
+	rm -rf $(DOWNLOADS)/ruby/.extmerge; \
+	mkdir -p $(DOWNLOADS)/ruby/.extmerge; \
+	for a in $$(find $(DOWNLOADS)/ruby/ext -name '*.a'); do \
+	  ( cd $(DOWNLOADS)/ruby/.extmerge && $(AR) x "$$a" ); \
+	done; \
+	rm -f $(LIBDIR)/libruby-ext.a; \
+	$(AR) rcs $(LIBDIR)/libruby-ext.a $(DOWNLOADS)/ruby/.extmerge/*.o; \
+	rm -rf $(DOWNLOADS)/ruby/.extmerge; \
+	echo "merged $$($(AR) t $(LIBDIR)/libruby-ext.a | wc -l) extension objects into libruby-ext.a"
 endef
 
 init_dirs:
