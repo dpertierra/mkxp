@@ -10,6 +10,8 @@
 #if defined(__WIN32__)
 #include <stdlib.h>
 #include <windows.h>
+#elif defined(__ANDROID__)
+#include <SDL_locale.h>
 #else
 #include <locale>
 #endif
@@ -19,6 +21,19 @@
 #include <string>
 
 std::string systemImpl::getSystemLanguage() {
+#if MKXPZ_PLATFORM == MKXPZ_PLATFORM_ANDROID
+    std::string language("en_US");
+    SDL_Locale *locales = SDL_GetPreferredLocales();
+    if (locales && locales[0].language) {
+        language = locales[0].language;
+        if (locales[0].country) {
+            language += "_";
+            language += locales[0].country;
+        }
+    }
+    SDL_free(locales);
+    return language;
+#else
     static char buf[50] = {0};
 #if defined(__WIN32__)
     wchar_t wbuf[50] = {0};
@@ -41,6 +56,7 @@ std::string systemImpl::getSystemLanguage() {
         }
     }
     return std::string(buf);
+#endif
 }
 
 std::string systemImpl::getUserName() {
@@ -49,6 +65,8 @@ std::string systemImpl::getUserName() {
     // The Ruby binding gets the username from the environment loaded
     // with Ruby instead, should fix getting it from WinAPI at some point
     return std::string("unused");
+#elif defined(__ANDROID__)
+    return std::string("Android");
 #else
     char ret[30];
     char *username = getenv("USER");
@@ -73,7 +91,9 @@ bool systemImpl::isRosetta() {
 }
 
 systemImpl::WineHostType systemImpl::getRealHostType() {
-#if MKXPZ_PLATFORM != MKXPZ_PLATFORM_WINDOWS
+#if MKXPZ_PLATFORM == MKXPZ_PLATFORM_ANDROID
+    return WineHostType::Android;
+#elif MKXPZ_PLATFORM != MKXPZ_PLATFORM_WINDOWS
     return WineHostType::Linux;
 #else
     void *ntdll = SDL_LoadObject("ntdll.dll");

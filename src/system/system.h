@@ -13,11 +13,14 @@
 #define MKXPZ_PLATFORM_WINDOWS 0
 #define MKXPZ_PLATFORM_MACOS 1
 #define MKXPZ_PLATFORM_LINUX 2
+#define MKXPZ_PLATFORM_ANDROID 3
 
 #ifdef __WIN32__
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_WINDOWS
 #elif defined __APPLE__
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_MACOS
+#elif defined __ANDROID__
+#define MKXPZ_PLATFORM MKXPZ_PLATFORM_ANDROID
 #elif defined __linux__
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_LINUX
 #else
@@ -28,7 +31,8 @@ namespace systemImpl {
 enum WineHostType {
     Windows,
     Linux,
-    Mac
+    Mac,
+    Android
 };
 std::string getSystemLanguage();
 std::string getUserName();

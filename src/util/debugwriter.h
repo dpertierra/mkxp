@@ -62,10 +62,9 @@ public:
 	~Debug()
 	{
 #ifdef __ANDROID__
-		__android_log_write(ANDROID_LOG_DEBUG, "mkxp", buf.str().c_str());
-#else
-		std::cerr << buf.str() << std::endl;
+		__android_log_print(ANDROID_LOG_DEBUG, "mkxp", "%s", buf.str().c_str());
 #endif
+		std::cerr << buf.str() << std::endl;
 	}
 
 private:

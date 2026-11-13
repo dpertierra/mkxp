@@ -5,7 +5,14 @@ vorbisfile = dependency('vorbisfile', static: build_static)
 vorbis = dependency('vorbis', static: build_static)
 ogg = dependency('ogg', static: build_static)
 opusfile = dependency('opusfile', static: build_static)
-sdl2 = dependency('SDL2', version: '>=2.0.9', static: build_static)
+if host_system == 'android'
+    sdl2 = dependency('SDL2', version: '>=2.0.14', static: build_static)
+    foreach lib : ['log', 'android', 'GLESv2', 'EGL']
+        global_dependencies += compilers['cpp'].find_library(lib)
+    endforeach
+else
+    sdl2 = dependency('SDL2', version: '>=2.0.9', static: build_static)
+endif
 sdl_sound = compilers['cpp'].find_library('SDL2_sound')
 sdl2_ttf = dependency('SDL2_ttf', static: build_static)
 freetype = dependency('freetype2', static: build_static)
@@ -63,7 +70,7 @@ if build_static == true
     if host_system == 'windows'
         # '-static-libgcc', '-static-libstdc++' are here to avoid needing to ship a separate libgcc_s_seh-1.dll on Windows; it still works without those flags if you have the dll.
         global_link_args += ['-static-libgcc', '-static-libstdc++', '-Wl,-Bstatic', '-lgcc', '-lstdc++', '-lpthread', '-Wl,-Bdynamic']
-    else
+    elif host_system != 'android'
         global_link_args += ['-static-libgcc', '-static-libstdc++']
     endif
     global_args += '-DAL_LIBTYPE_STATIC'

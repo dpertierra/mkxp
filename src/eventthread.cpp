@@ -720,6 +720,10 @@ int EventThread::eventFilter(void *data, SDL_Event *event)
                 alc.DevicePause(rtData.alcDev);
             
             rtData.syncPoint.haltThreads();
+
+#ifdef __ANDROID__
+            rtData.ethread->resetInputStates();
+#endif
             
             return 0;
             
@@ -743,6 +747,11 @@ int EventThread::eventFilter(void *data, SDL_Event *event)
             
         case SDL_APP_TERMINATING :
             Debug() << "SDL_APP_TERMINATING";
+#ifdef __ANDROID__
+            rtData.syncPoint.resumeThreads();
+            event->type = SDL_QUIT;
+            return 1;
+#endif
             return 0;
             
         case SDL_APP_LOWMEMORY :
