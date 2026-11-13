@@ -511,15 +511,18 @@ define write_ruby_pc
 endef
 
 # --with-static-linked-ext compiles every extension into its own ext/**/<ext>.a
-# but does not put those objects in libruby-static.a. extinit.o (inside the
-# archive) references Init_<ext>, so the engine link needs them: merge every ext
-# archive into one libruby-ext.a next to libruby-static.a.
+# but does not put those objects in libruby-static.a, which ships dmyext.o (an
+# empty Init_ext) instead of ext/extinit.o. Merge every ext archive plus
+# extinit.o into one libruby-ext.a and drop dmyext.o, so `require "zlib"` etc.
+# resolve to the statically linked extensions.
 define merge_ruby_ext
 	rm -rf $(DOWNLOADS)/ruby/.extmerge; \
 	mkdir -p $(DOWNLOADS)/ruby/.extmerge; \
 	for a in $$(find $(DOWNLOADS)/ruby/ext -name '*.a'); do \
 	  ( cd $(DOWNLOADS)/ruby/.extmerge && $(AR) x "$$a" ); \
 	done; \
+	cp $(DOWNLOADS)/ruby/ext/extinit.o $(DOWNLOADS)/ruby/.extmerge/; \
+	$(AR) d $(LIBDIR)/libruby-static.a dmyext.o; \
 	rm -f $(LIBDIR)/libruby-ext.a; \
 	$(AR) rcs $(LIBDIR)/libruby-ext.a $(DOWNLOADS)/ruby/.extmerge/*.o; \
 	rm -rf $(DOWNLOADS)/ruby/.extmerge; \
