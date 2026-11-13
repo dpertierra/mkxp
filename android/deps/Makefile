@@ -172,14 +172,15 @@ $(DOWNLOADS)/vorbis/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/xiph/vorbis -b v1.3.7 $(DOWNLOADS)/vorbis
 
 # Freetype (dependency of SDL2_ttf)
-# CMake build does not install a .pc, so we write freetype2.pc ourselves below.
+# CMake build does not install a .pc, so we write freetype2.pc ourselves below
+# (version kept in sync with the cloned mkxp-z/freetype2 branch).
 freetype: init_dirs libpng $(LIBDIR)/libfreetype.a
 
 $(LIBDIR)/libfreetype.a: $(LIBDIR)/libpng.a $(DOWNLOADS)/freetype/cmakebuild/Makefile
 	cd $(DOWNLOADS)/freetype/cmakebuild; \
 	make -j$(NPROC); make install; \
 	test -e $(LIBDIR)/pkgconfig/freetype2.pc || \
-	$(call write_pc,freetype2,2.13.3,freetype,-lz -lpng16,/freetype2)
+	$(call write_pc,freetype2,2.13.0,freetype,-lz -lpng16,/freetype2,)
 
 $(DOWNLOADS)/freetype/cmakebuild/Makefile: $(DOWNLOADS)/freetype/CMakeLists.txt
 	cd $(DOWNLOADS)/freetype; \
@@ -238,7 +239,9 @@ sdl2image: init_dirs sdl2 libpng $(LIBDIR)/libSDL2_image.a
 
 $(LIBDIR)/libSDL2_image.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libpng.a $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile
 	cd $(DOWNLOADS)/sdl2_image/cmakebuild; \
-	make -j$(NPROC); make install
+	make -j$(NPROC); make install; \
+	test -e $(LIBDIR)/pkgconfig/SDL2_image.pc || \
+	$(call write_pc,SDL2_image,2.6.3,SDL2_image,,,sdl2)
 
 $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.txt
 	cd $(DOWNLOADS)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
@@ -264,6 +267,13 @@ $(LIBDIR)/libSDL2_ttf.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libfreetype.a $(DOWNLOAD
 	make -j$(NPROC); make install
 
 $(DOWNLOADS)/sdl2_ttf/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt
+	@# The mkxp-z sdl_ttf fork assumes the SDL Android.mk flow (vendored freetype)
+	@# when ANDROID is set; our deps are cross-built like desktop, so take the
+	@# find_package(SDL2)/find_package(Freetype) path instead.
+	@if grep -q '^if (ANDROID)$$' $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt; then \
+	  sed -i '0,/^if (ANDROID)$$/s//if (FALSE) # android\/deps: use cross SDL2+freetype/' \
+	    $(DOWNLOADS)/sdl2_ttf/CMakeLists.txt; \
+	  echo "patched sdl2_ttf/CMakeLists.txt: skip Android.mk path"; fi
 	cd $(DOWNLOADS)/sdl2_ttf; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DBUILD_SHARED_LIBS=off \
 	-DFREETYPE_INCLUDE_DIRS="$(INCLUDEDIR)/freetype2" \
@@ -278,7 +288,9 @@ sdlsound: init_dirs sdl2 libogg libvorbis $(LIBDIR)/libSDL2_sound.a
 
 $(LIBDIR)/libSDL2_sound.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libvorbis.a $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile
 	cd $(DOWNLOADS)/sdl_sound/cmakebuild; \
-	make -j$(NPROC); make install
+	make -j$(NPROC); make install; \
+	test -e $(LIBDIR)/pkgconfig/SDL2_sound.pc || \
+	$(call write_pc,SDL2_sound,2.0.1,SDL2_sound,-lm,,sdl2)
 
 $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile: $(DOWNLOADS)/sdl_sound/CMakeLists.txt
 	cd $(DOWNLOADS)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
@@ -293,7 +305,12 @@ $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile: $(DOWNLOADS)/sdl_sound/CMakeLists.tx
 $(DOWNLOADS)/sdl_sound/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/mkxp-z/SDL_sound $(DOWNLOADS)/sdl_sound -b git
 
-# OpenAL Soft, OpenSL ES + AAudio backends (everything desktop is off)
+# OpenAL Soft with the OpenSL ES backend.
+# AAudio is NOT available: upstream openal-soft has no AAudio backend (checked
+# through 1.25.2), and -DALSOFT_BACKEND_AAUDIO is ignored by CMake. OpenSL ES
+# is the only Android audio backend. OpenAL Soft itself stays LGPL-2.1+ (Fase 0
+# of the plan); it is statically linked, which the LGPL allows only with
+# relinkable objects — revisit if the license review demands a shared libopenal.so.
 openal: init_dirs check-toolchain $(LIBDIR)/libopenal.a
 
 $(LIBDIR)/libopenal.a: $(DOWNLOADS)/openal/cmakebuild/Makefile
@@ -303,11 +320,12 @@ $(LIBDIR)/libopenal.a: $(DOWNLOADS)/openal/cmakebuild/Makefile
 $(DOWNLOADS)/openal/cmakebuild/Makefile: $(DOWNLOADS)/openal/CMakeLists.txt
 	cd $(DOWNLOADS)/openal; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DLIBTYPE=STATIC -DALSOFT_EXAMPLES=off -DALSOFT_UTILS=off -DALSOFT_TESTS=off \
-	-DALSOFT_BACKEND_OPENSL=on -DALSOFT_BACKEND_AAUDIO=on \
+	-DALSOFT_BACKEND_OPENSL=on \
 	-DALSOFT_BACKEND_ALSA=off -DALSOFT_BACKEND_PULSEAUDIO=off \
 	-DALSOFT_BACKEND_PIPEWIRE=off -DALSOFT_BACKEND_JACK=off \
 	-DALSOFT_BACKEND_PORTAUDIO=off -DALSOFT_BACKEND_SDL2=off \
-	-DALSOFT_BACKEND_WAVE=on $(OPENAL_FLAGS)
+	-DALSOFT_BACKEND_WAVE=on \
+	-DCMAKE_CXX_FLAGS="$(CFLAGS) -include cstdlib" $(OPENAL_FLAGS)
 
 $(DOWNLOADS)/openal/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/kcat/openal-soft -b 1.24.3 $(DOWNLOADS)/openal
@@ -338,8 +356,6 @@ $(DOWNLOADS)/ruby/configure.ac:
 # Ruby versions that aren't valid C23 (3.1.x is one of those).
 
 # ====
-# Hand-written .pc file for libs whose build system does not ship one.
-# $(1) name, $(2) version, $(3) -l name, $(4) Libs.private, $(5) Cflags suffix.
 # Move .pc files that installed outside lib/pkgconfig into the prefix's
 # lib/pkgconfig, which is what PKG_CONFIG_LIBDIR points at (zlib uses
 # share/pkgconfig by default).
@@ -350,6 +366,9 @@ define pc_fixup
 	done; true
 endef
 
+# Hand-written .pc file for libs whose build system does not ship one.
+# $(1) name, $(2) version, $(3) -l name, $(4) Libs.private, $(5) Cflags suffix,
+# $(6) Requires.
 define write_pc
 	mkdir -p $(LIBDIR)/pkgconfig; \
 	printf '%s\n' \
@@ -361,6 +380,7 @@ define write_pc
 	  'Name: $(1)' \
 	  'Description: $(1) for Android arm64 (cross-built by android/deps/Makefile)' \
 	  'Version: $(2)' \
+	  'Requires: $(6)' \
 	  'Libs: -L$${libdir} -l$(3)' \
 	  'Libs.private: $(4)' \
 	  'Cflags: -I$${includedir}$(5)' \
