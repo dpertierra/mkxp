@@ -132,6 +132,77 @@ $(DOWNLOADS)/zlib/cmakebuild/Makefile: $(DOWNLOADS)/zlib/CMakeLists.txt
 $(DOWNLOADS)/zlib/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/madler/zlib -b v1.3.1 $(DOWNLOADS)/zlib
 
+# Opus decoding is used by both streaming audio and sound effects.
+libopus: init_dirs check-toolchain $(LIBDIR)/libopus.a
+
+$(LIBDIR)/libopus.a: | $(DOWNLOADS)/opus/cmakebuild/Makefile
+	set -e; cd $(DOWNLOADS)/opus/cmakebuild; make -j$(NPROC); make install
+
+$(DOWNLOADS)/opus/cmakebuild/Makefile: $(DOWNLOADS)/opus/CMakeLists.txt
+	set -e; cd $(DOWNLOADS)/opus; mkdir -p cmakebuild; cd cmakebuild; \
+	$(CMAKE) -DBUILD_SHARED_LIBS=off -DOPUS_BUILD_PROGRAMS=off -DOPUS_BUILD_TESTING=off
+
+$(DOWNLOADS)/opus/CMakeLists.txt:
+	$(CLONE) $(GITHUB)/xiph/opus -b v1.5.2 $(DOWNLOADS)/opus
+
+libopusfile: init_dirs libogg libopus $(LIBDIR)/libopusfile.a
+
+$(LIBDIR)/libopusfile.a: $(LIBDIR)/libogg.a $(LIBDIR)/libopus.a | $(DOWNLOADS)/opusfile/Makefile
+	set -e; cd $(DOWNLOADS)/opusfile; make -j$(NPROC); make install
+
+$(DOWNLOADS)/opusfile/Makefile: $(DOWNLOADS)/opusfile/configure
+	set -e; cd $(DOWNLOADS)/opusfile; \
+	$(CONFIGURE) --enable-static --disable-shared --disable-http --disable-doc --disable-examples
+
+$(DOWNLOADS)/opusfile/configure: $(DOWNLOADS)/opusfile/autogen.sh
+	set -e; cd $(DOWNLOADS)/opusfile; ./autogen.sh
+
+$(DOWNLOADS)/opusfile/autogen.sh:
+	$(CLONE) $(GITHUB)/xiph/opusfile -b v0.12 $(DOWNLOADS)/opusfile
+
+pixman: init_dirs check-toolchain $(LIBDIR)/libpixman-1.a
+
+$(LIBDIR)/libpixman-1.a: | $(DOWNLOADS)/pixman/Makefile
+	set -e; cd $(DOWNLOADS)/pixman; make -j$(NPROC); make install
+
+$(DOWNLOADS)/pixman/Makefile: $(DOWNLOADS)/pixman/autogen.sh
+	set -e; cd $(DOWNLOADS)/pixman; $(CONFIGURE_ENV) ./autogen.sh $(CONFIGURE_ARGS) \
+	--enable-static --disable-shared --disable-gtk --disable-libpng --disable-openmp --disable-arm-a64-neon
+
+$(DOWNLOADS)/pixman/autogen.sh:
+	$(CLONE) https://gitlab.freedesktop.org/pixman/pixman -b pixman-0.42.2 $(DOWNLOADS)/pixman
+
+uchardet: init_dirs check-toolchain $(LIBDIR)/libuchardet.a
+
+$(LIBDIR)/libuchardet.a: | $(DOWNLOADS)/uchardet/cmakebuild/Makefile
+	set -e; cd $(DOWNLOADS)/uchardet/cmakebuild; make -j$(NPROC); make install; \
+	sed -i 's/-lstdc++/-lc++_shared/g' $(LIBDIR)/pkgconfig/uchardet.pc
+
+$(DOWNLOADS)/uchardet/cmakebuild/Makefile: $(DOWNLOADS)/uchardet/CMakeLists.txt
+	set -e; cd $(DOWNLOADS)/uchardet; mkdir -p cmakebuild; cd cmakebuild; \
+	$(CMAKE) -DBUILD_SHARED_LIBS=off -DBUILD_BINARY=off
+
+$(DOWNLOADS)/uchardet/CMakeLists.txt:
+	$(CLONE) https://gitlab.freedesktop.org/uchardet/uchardet -b v0.0.8 $(DOWNLOADS)/uchardet
+
+iconv: init_dirs check-toolchain $(LIBDIR)/libiconv.a
+
+$(LIBDIR)/libiconv.a: | $(DOWNLOADS)/libiconv-1.18/Makefile
+	set -e; cd $(DOWNLOADS)/libiconv-1.18; make -j$(NPROC); make install; \
+	$(call write_pc,iconv,1.18,iconv,,,,)
+
+$(DOWNLOADS)/libiconv-1.18/Makefile: $(DOWNLOADS)/libiconv-1.18/configure
+	set -e; cd $(DOWNLOADS)/libiconv-1.18; $(CONFIGURE) --enable-static --disable-shared
+
+$(DOWNLOADS)/libiconv-1.18/configure: $(DOWNLOADS)/libiconv-1.18.tar.gz
+	tar -xzf $< -C $(DOWNLOADS)
+
+$(DOWNLOADS)/libiconv-1.18.tar.gz:
+	mkdir -p $(DOWNLOADS)
+	curl -fL https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz -o $@.part
+	echo '3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8  $@.part' | sha256sum -c -
+	mv $@.part $@
+
 # libpng
 libpng: init_dirs zlib $(LIBDIR)/libpng.a
 
@@ -460,5 +531,5 @@ powerwash: clean-downloads
 clean-downloads:
 	-rm -rf downloads
 
-deps-core: zlib libpng libogg libvorbis freetype physfs sdl2 sdl2image sdlsound sdl2ttf openal
+deps-core: zlib libpng libogg libvorbis libopusfile pixman uchardet iconv freetype physfs sdl2 sdl2image sdlsound sdl2ttf openal
 everything: deps-core ruby
