@@ -993,6 +993,19 @@ struct GraphicsPrivate {
             threadData->windowSizeMsg.post(Vec2i(winW, winH));
             threadData->drawableSizeMsg.post(Vec2i(drwW, drwH));
         }
+#elif defined(__ANDROID__)
+        /* The Android surface is resized/rotated after window creation
+         * without a reliable SDL_WINDOWEVENT_SIZE_CHANGED, so the game would
+         * keep rendering at its initial 512x384 in a corner. Poll instead. */
+        int drwW, drwH;
+        SDL_GL_GetDrawableSize(threadData->window, &drwW, &drwH);
+        if (drwW > 0 && drwH > 0 && (drwW != winSize.x || drwH != winSize.y))
+        {
+            int winW, winH;
+            SDL_GetWindowSize(threadData->window, &winW, &winH);
+            threadData->windowSizeMsg.post(Vec2i(winW, winH));
+            threadData->drawableSizeMsg.post(Vec2i(drwW, drwH));
+        }
 #endif
         if (threadData->windowSizeMsg.poll(winSize)) {
             /* Query the actual size in pixels, not units */

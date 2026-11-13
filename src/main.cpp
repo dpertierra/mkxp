@@ -348,9 +348,14 @@ int main(int argc, char *argv[]) {
 
     if (conf.winResizable)
       winFlags |= SDL_WINDOW_RESIZABLE;
+#ifdef __ANDROID__
+    // Android apps always own the whole screen.
+    winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#else
     if (conf.fullscreen)
       winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    
+#endif
+
 #ifdef GLES2_HEADER
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
