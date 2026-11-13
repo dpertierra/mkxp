@@ -33,6 +33,11 @@
 
 #include <physfs.h>
 
+#ifdef __ANDROID__
+#include <SDL_system.h>
+#include <jni.h>
+#endif
+
 #include <algorithm>
 #include <stack>
 #include <stdio.h>
@@ -295,7 +300,16 @@ static void throwPhysfsError(const char *desc) {
 }
 
 FileSystem::FileSystem(const char *argv0, bool allowSymlinks) {
+#ifdef __ANDROID__
+  // PhysFS on Android reads argv0 as a PHYSFS_AndroidInit*, not a path.
+  PHYSFS_AndroidInit ainit = {SDL_AndroidGetJNIEnv(), SDL_AndroidGetActivity()};
+  int inited = PHYSFS_init((const char *)&ainit);
+  JNIEnv *env = (JNIEnv *)ainit.jnienv;
+  env->DeleteLocalRef((jobject)ainit.context);
+  if (inited == 0)
+#else
   if (PHYSFS_init(argv0) == 0)
+#endif
     throwPhysfsError("Error initializing PhysFS");
 
   /* One error (=return 0) turns the whole product to 0 */
