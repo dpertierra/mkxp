@@ -173,7 +173,12 @@ libvorbis: init_dirs libogg $(LIBDIR)/libvorbis.a
 
 $(LIBDIR)/libvorbis.a: $(LIBDIR)/libogg.a | $(DOWNLOADS)/vorbis/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/vorbis/cmakebuild; \
-	make -j$(NPROC); make install
+	make -j$(NPROC); make install; \
+	cd $(LIBDIR)/pkgconfig; \
+	for f in vorbis.pc vorbisfile.pc vorbisenc.pc; do \
+	  grep -q -- '-lm' $$f || \
+	  sed -i -e '/^Libs\.private:/d' -e '/^Libs:/a Libs.private: -lm' $$f; \
+	done
 
 $(DOWNLOADS)/vorbis/cmakebuild/Makefile: $(DOWNLOADS)/vorbis/CMakeLists.txt
 	set -e; cd $(DOWNLOADS)/vorbis; \
@@ -192,8 +197,7 @@ freetype: init_dirs libpng $(LIBDIR)/libfreetype.a
 $(LIBDIR)/libfreetype.a: $(LIBDIR)/libpng.a | $(DOWNLOADS)/freetype/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/freetype/cmakebuild; \
 	make -j$(NPROC); make install; \
-	test -e $(LIBDIR)/pkgconfig/freetype2.pc || \
-	$(call write_pc,freetype2,2.13.0,freetype,-lz -lpng16,/freetype2,)
+	$(call write_pc,freetype2,2.13.0,freetype,-lz -lpng16 -lm,/freetype2,)
 
 $(DOWNLOADS)/freetype/cmakebuild/Makefile: $(DOWNLOADS)/freetype/CMakeLists.txt
 	set -e; cd $(DOWNLOADS)/freetype; \
@@ -234,7 +238,8 @@ $(LIBDIR)/libSDL2.so: | $(DOWNLOADS)/sdl2/cmakebuild/Makefile
 	    $(DOWNLOADS)/sdl2/src/sensor/android/SDL_androidsensor.c; \
 	  echo "patched SDL_androidsensor.c: ALooper_pollAll -> ALooper_pollOnce"; fi
 	set -e; cd $(DOWNLOADS)/sdl2/cmakebuild; \
-	make -j$(NPROC); make install
+	make -j$(NPROC); make install; \
+	sed -i 's/^Libs\.private: *-lSDL2 */Libs.private: /' $(LIBDIR)/pkgconfig/sdl2.pc
 
 $(DOWNLOADS)/sdl2/cmakebuild/Makefile: $(DOWNLOADS)/sdl2/CMakeLists.txt
 	set -e; cd $(DOWNLOADS)/sdl2; \
@@ -253,8 +258,7 @@ sdl2image: init_dirs sdl2 libpng $(LIBDIR)/libSDL2_image.a
 $(LIBDIR)/libSDL2_image.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libpng.a | $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/sdl2_image/cmakebuild; \
 	make -j$(NPROC); make install; \
-	test -e $(LIBDIR)/pkgconfig/SDL2_image.pc || \
-	$(call write_pc,SDL2_image,2.6.3,SDL2_image,,,sdl2)
+	$(call write_pc,SDL2_image,2.6.3,SDL2_image,,/SDL2,sdl2)
 
 $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.txt
 	set -e; cd $(DOWNLOADS)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
@@ -308,8 +312,7 @@ sdlsound: init_dirs sdl2 libogg libvorbis $(LIBDIR)/libSDL2_sound.a
 $(LIBDIR)/libSDL2_sound.a: $(LIBDIR)/libSDL2.so $(LIBDIR)/libvorbis.a | $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile
 	set -e; cd $(DOWNLOADS)/sdl_sound/cmakebuild; \
 	make -j$(NPROC); make install; \
-	test -e $(LIBDIR)/pkgconfig/SDL2_sound.pc || \
-	$(call write_pc,SDL2_sound,2.0.1,SDL2_sound,-lm,,sdl2)
+	$(call write_pc,SDL2_sound,2.0.1,SDL2_sound,-lm,/SDL2,sdl2)
 
 $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile: $(DOWNLOADS)/sdl_sound/CMakeLists.txt
 	set -e; cd $(DOWNLOADS)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
