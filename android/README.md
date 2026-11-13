@@ -109,8 +109,9 @@ cd android
 
 1. `SplashActivity` copia `assets/game` a `getFilesDir()/game` en un hilo
    secundario, con barra de progreso (no bloquea el hilo principal → no hay
-   ANR). La copia va primero a `getFilesDir()/.game-install` y se renombra al
-   terminar, así una copia interrumpida no deja el juego a medias.
+   ANR). La copia va primero a `getFilesDir()/.game-install`; el juego anterior
+   se aparta y solo se borra cuando el nuevo está completo, así una copia
+   interrumpida no deja el juego a medias ni borra el que ya funcionaba.
 2. La copia se hace en el primer arranque y se repite cuando cambia
    `assets/game.version`.
 3. `MkxpActivity` publica la ruta final con

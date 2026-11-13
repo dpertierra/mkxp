@@ -90,8 +90,9 @@ final class GameDataInstaller {
 
         File target = gameDir();
         File staging = new File(context.getFilesDir(), TMP_DIR_NAME);
+        File previous = new File(context.getFilesDir(), TMP_DIR_NAME + "-previous");
         deleteRecursively(staging);
-        deleteRecursively(target);
+        deleteRecursively(previous);
         if (!staging.mkdirs()) {
             throw new IOException("Could not create " + staging.getAbsolutePath());
         }
@@ -99,10 +100,16 @@ final class GameDataInstaller {
         int total = countEntries(assets, GAME_ASSET_DIR);
         copyTree(assets, GAME_ASSET_DIR, staging, total, listener, new Counter());
 
+        // The previous game stays usable until the new one is fully copied.
+        boolean hadPrevious = target.isDirectory() && target.renameTo(previous);
         if (!staging.renameTo(target)) {
+            if (hadPrevious) {
+                previous.renameTo(target);
+            }
             deleteRecursively(staging);
             throw new IOException("Could not install the game data into " + target.getAbsolutePath());
         }
+        deleteRecursively(previous);
 
         prefs().edit().putString(KEY_INSTALLED_VERSION, assetVersion()).apply();
     }
