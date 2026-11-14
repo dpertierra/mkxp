@@ -14,12 +14,14 @@ import java.io.OutputStream;
 
 /**
  * Installs the game tree that ships inside the APK ({@code assets/game})
- * into the app's private storage ({@code <filesDir>/game}).
+ * into the app's private storage ({@code <filesDir>/game}), except the
+ * read-only directories listed in {@code BuildConfig.APK_ONLY_DIRS}.
  *
  * <p>The copy happens on the first launch and is repeated whenever the
  * marker file {@code assets/game.version} differs from the marker stored on
  * the device. Bump that marker whenever the APK is updated with new game
- * data, otherwise the old copy is kept.
+ * data, otherwise the old copy is kept. A changed APK-only directory list
+ * also triggers installation, removing copies left by older APKs.
  *
  * <p>The tree is first written to a temporary directory and moved into place
  * afterwards, so an interrupted install never leaves a half-copied game.
@@ -37,6 +39,7 @@ final class GameDataInstaller {
     /** Where the installed marker is kept. */
     private static final String PREFS_NAME = "mkxpz";
     private static final String KEY_INSTALLED_VERSION = "installedGameVersion";
+    private static final String KEY_APK_ONLY_DIRS = "installedApkOnlyDirs";
 
     /** Progress callback; invoked on the worker thread. */
     interface ProgressListener {
@@ -70,10 +73,12 @@ final class GameDataInstaller {
 
     /** True when the game data is missing or outdated. */
     boolean needsInstall() {
-        if (!gameDir().isDirectory()) {
+        if (!gameDir().isDirectory()
+                || new File(context.getFilesDir(), TMP_DIR_NAME + "-previous").exists()) {
             return true;
         }
-        return !assetVersion().equals(installedVersion());
+        return !assetVersion().equals(installedVersion())
+                || !BuildConfig.APK_ONLY_DIRS.equals(prefs().getString(KEY_APK_ONLY_DIRS, null));
     }
 
     /**
@@ -111,7 +116,9 @@ final class GameDataInstaller {
         }
         deleteRecursively(previous);
 
-        prefs().edit().putString(KEY_INSTALLED_VERSION, assetVersion()).apply();
+        // Replacing the old tree also removes Graphics/Audio copied by older APKs.
+        prefs().edit().putString(KEY_INSTALLED_VERSION, assetVersion())
+                .putString(KEY_APK_ONLY_DIRS, BuildConfig.APK_ONLY_DIRS).apply();
     }
 
     private void copyTree(AssetManager assets, String assetPath, File target, int total,
@@ -121,6 +128,7 @@ final class GameDataInstaller {
             return;
         }
         for (String name : names) {
+            if (isApkOnly(assetPath, name)) continue;
             String childAsset = assetPath + "/" + name;
             File childTarget = new File(target, name);
             String[] children = assets.list(childAsset);
@@ -165,6 +173,7 @@ final class GameDataInstaller {
         }
         int total = 0;
         for (String name : names) {
+            if (isApkOnly(assetPath, name)) continue;
             String childAsset = assetPath + "/" + name;
             String[] children = assets.list(childAsset);
             if (children != null && children.length > 0) {
@@ -180,11 +189,19 @@ final class GameDataInstaller {
         return prefs().getString(KEY_INSTALLED_VERSION, "");
     }
 
+    private static boolean isApkOnly(String parent, String name) {
+        if (!GAME_ASSET_DIR.equals(parent)) return false;
+        for (String directory : BuildConfig.APK_ONLY_DIRS.split(",")) {
+            if (directory.equalsIgnoreCase(name)) return true;
+        }
+        return false;
+    }
+
     private SharedPreferences prefs() {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 
-    private static void deleteRecursively(File file) {
+    private static void deleteRecursively(File file) throws IOException {
         if (!file.exists()) {
             return;
         }
@@ -196,8 +213,9 @@ final class GameDataInstaller {
                 }
             }
         }
-        // Best effort: a leftover file is overwritten by the next install.
-        file.delete();
+        if (!file.delete() && file.exists()) {
+            throw new IOException("Could not delete " + file.getAbsolutePath());
+        }
     }
 
     private static String readString(InputStream in) throws IOException {

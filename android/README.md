@@ -78,12 +78,15 @@ También se puede usar Gradle directamente desde `android/`:
   datos del juego de `app/src/main/assets/`, conservando sus demás assets.
   Las rutas relativas se resuelven desde `android/app/`.
 - `mkxpz.appName`: nombre de la app en todos los idiomas; por defecto `MKXP-Z`.
+- `mkxpz.apkOnlyDirs`: directorios de primer nivel que se leen desde el APK,
+  separados por comas; por defecto `Graphics,Audio`. Más detalles abajo.
 - `mkxpz.icon`: PNG opcional, escalado a 192×192 en `app/build/generated/`,
   con recurso xxxhdpi y fallback legacy; sin propiedad se mantiene el icono
   adaptativo de MKXP-Z. Conviene usar una imagen cuadrada.
 
-Los audios, PNG y vídeos habituales se guardan sin compresión en el APK,
-reduciendo el trabajo de empaquetado de juegos grandes (~1,5 GB). Gradle dispone
+Todos los assets se guardan sin compresión (`Stored`) en el APK, incluidos los
+archivos sin extensión y formatos propios del juego. Esto permite lectura y
+seek de PhysFS sin descompresión, también para audio en streaming. Gradle dispone
 de hasta 4 GB de heap: el equipo necesita memoria y espacio libre para la copia,
 los intermedios y el APK. Un build pequeño no valida los límites de un juego
 grande ni los límites de distribución de las tiendas.
@@ -210,20 +213,135 @@ datos en el primer arranque posterior a la actualización.
 
 ## Directorio del juego (mecanismo elegido)
 
-1. `SplashActivity` copia `assets/game` a `getFilesDir()/game` en un hilo
+1. `SplashActivity` copia los archivos pequeños de `assets/game` a
+   `getFilesDir()/game` en un hilo
    secundario, con barra de progreso (no bloquea el hilo principal → no hay
    ANR). La copia va primero a `getFilesDir()/.game-install`; el juego anterior
    se aparta y solo se borra cuando el nuevo está completo, así una copia
    interrumpida no deja el juego a medias ni borra el que ya funcionaba.
-2. La copia se hace en el primer arranque y se repite cuando cambia
-   `assets/game.version`.
+2. No copia los directorios de `mkxpz.apkOnlyDirs` (por defecto `Graphics` y
+   `Audio`, comparación sin distinguir mayúsculas). La copia se hace en el
+   primer arranque y se repite cuando cambia `assets/game.version` **o la
+   lista de directorios APK-only**. Sustituir y borrar el árbol anterior
+   retira también las copias grandes de versiones antiguas; un fallo de
+   borrado se muestra como error de instalación para poder reintentarlo.
 3. `MkxpActivity` publica la ruta final con
    `Os.setenv("MKXPZ_GAME_DIR", "<filesDir>/game", true)` **antes** de que SDL
-   arranque el hilo nativo.
+   arranque el hilo nativo. También publica `MKXPZ_APK_PATH` con
+   `getApplicationInfo().sourceDir`.
 
 El motor lee `MKXPZ_GAME_DIR` al inicio de `main()` (`src/main.cpp`, bloque
 `__ANDROID__`) y hace `chdir()` ahí antes de cargar `Data/`. En Android se compila
 con `WORKDIR_CURRENT`, así que esa carpeta es la raíz del juego.
+
+Después monta la carpeta extraída y añade el APK como ZIP de PhysFS, con
+`PHYSFS_setRoot(..., "assets/game")`. La carpeta extraída tiene prioridad sobre
+el APK; los parches y RGSSAD conservan su prioridad anterior, y los RTP se
+añaden después. El montaje precede a `createPathCache()`, así que el caché de
+rutas y las búsquedas del motor incluyen los assets empaquetados. Hace falta
+PhysFS con `PHYSFS_setRoot` (las dependencias Android incluyen 3.2).
+
+### Configurar la extracción
+
+```bash
+# Añadir otra carpeta de solo lectura:
+./android/package-game.sh /ruta/al/juego io.github.autor.mijuego "Mi juego" -- \
+  '-Pmkxpz.apkOnlyDirs=Graphics,Audio,Movies'
+
+# Compatibilidad: volver a extraer todo.
+./android/package-game.sh /ruta/al/juego io.github.autor.mijuego "Mi juego" -- \
+  -Pmkxpz.apkOnlyDirs=
+```
+
+Solo se admiten nombres de directorio de primer nivel, sin `/` ni `\`, y
+distintos de `.` y `..`. La lista se normaliza en Gradle y llega al instalador
+mediante `BuildConfig.APK_ONLY_DIRS`. Mantén `mkxp.json`, `Data`, scripts,
+plugins, fuentes y datos que deban escribirse entre lo extraído. El APK
+completo se monta aunque la lista esté vacía.
+
+Espacio estable aproximado: **APK + archivos extraídos + guardados**. Un
+juego de 1,5 GB con 150 MB fuera de Graphics/Audio ronda 1,65 GB, más el motor
+y datos de la app; no es una medición en dispositivo. Una actualización
+necesita espacio temporal para el APK, el árbol anterior y la nueva extracción.
+Como en el instalador anterior, reinstalar sustituye todo `filesDir/game`;
+los guardados y datos generados que deban persistir deben quedar fuera de él.
+Los archivos RGSSAD no se dividen: se extraen si no están dentro de una carpeta
+APK-only. Los splits y Play Asset Delivery no están contemplados: se monta
+solo `sourceDir` del APK único producido por este proyecto.
+
+### Compatibilidad Ruby
+
+Solo en Android, y solo después de montar el APK, el binding expone tres
+helpers internos (`MKXPZ_APKFS.native_stat`, `native_read`, `native_entries`)
+y evalúa `binding/android-apk-filesystem.rb` **antes** del script personalizado,
+`preload.rb` y los scripts RGSS. No se modifica el juego ni el comportamiento
+del binding de escritorio.
+
+Cobertura del shim:
+
+- `File.exist?`/`exists?`, `File.file?`, `File.directory?` y los equivalentes
+  de `FileTest`; `Dir.exist?`/`exists?`; `File.size`.
+- `File.open` de lectura (`r`, `rb`, modo entero de solo lectura, opciones de
+  codificación habituales), con o sin bloque; `File.read` y `File.binread`,
+  con longitud y desplazamiento. El stream es un `StringIO` con `path`,
+  `read`, `getbyte`, `seek`, `pos`, `eof?`, `close` y enumeración de líneas.
+- `Dir.entries`, `children`, `foreach` (bloque o enumerador), `glob` y `[]`.
+  Mezcla disco y PhysFS sin duplicar nombres. Globs con `*`, `?`, `**`,
+  clases `[]`, `{a,b}`, flags de `File.fnmatch`, `base:` y `sort:`.
+
+Solo busca en PhysFS para rutas **relativas** que permanezcan dentro de la
+raíz del juego, incluso tras un `Dir.chdir` a una subcarpeta extraída. Las
+rutas absolutas o que escapan de esa raíz siguen usando disco. Los archivos
+reales tienen prioridad; las escrituras siguen pasando a `File` nativo.
+Los helpers de Essentials como `safeExists?` y `pbResolveBitmap` pueden usar
+estas operaciones sin una copia de los gráficos. La resolución virtual de
+nombres usa el caché del motor y, para directorios o caché desactivado,
+recorre componentes con comparación de mayúsculas ASCII.
+
+Límites conocidos:
+
+- Escribir dentro de Graphics/Audio APK-only no está soportado. Para un
+  plugin que modifica assets, quita su carpeta de `apkOnlyDirs`. Crear
+  directorios con `FileUtils.mkdir_p` también puede ver el directorio virtual
+  como existente sin crear uno físico.
+- `File.open` virtual carga **un archivo completo en RAM**. No es un descriptor
+  nativo: no ofrece `fileno`, `mmap`, `IO.select` ni compatibilidad con APIs C
+  que exigen un archivo físico. El audio del motor sí mantiene streaming y
+  seek con PhysFS; no pasa por este buffer Ruby.
+- No se interceptan `File.new`, `File.stat`/`lstat`, `IO.read`, `FileTest.size?`,
+  `Kernel#test`, `Dir.open`/`Dir.new`/`Dir.chdir` hacia carpetas solo virtuales,
+  `require`/`load` de scripts no extraídos ni librerías externas con I/O propio.
+  Tampoco se emulan permisos de `File.open`, `File.read(open_args:)` o todas
+  las conversiones de codificación de MRI; se cubre lectura habitual de assets.
+- Cada glob recorre su subárbol literal y filtra con `File.fnmatch`; no hay
+  índice persistente ni orden estable con `sort: false`. No desciende enlaces
+  simbólicos físicos, para no recorrer ciclos.
+
+### Comprobaciones sin teléfono
+
+```bash
+ruby android/tests/apk-filesystem-test.rb
+./android/build-native.sh
+cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug
+unzip -v build-games/io.github.autor.mijuego.apk | grep 'assets/game/'
+```
+
+La comprobación Ruby usa assets falsos y disco temporal, sin cargar el motor.
+Revisa `Stored` también para `.rxdata`, `.rb`, extensiones propias y archivos
+sin extensión, no solo PNG/audio. No valida arranque, Java en ejecución ni
+audio en Android.
+
+Verificación manual en dispositivo:
+
+1. Actualizar una instalación antigua con el mismo identificador y firma;
+   abrirla y comprobar que no queden copias de Graphics/Audio en los datos
+   privados. Revisar el espacio ocupado tras terminar la instalación.
+2. Cargar partida, cambiar de mapa y abrir menús con gráficos. Probar BGM/BGS
+   largos, efectos, cambios de pista y desplazamientos de reproducción.
+3. Guardar y recargar. Revisar plugins que enumeran carpetas y leen assets;
+   si fallan, consultar `errorlog.txt`, `mkxp.log` y los logs de la app.
+4. Repetir con `-Pmkxpz.apkOnlyDirs=` y después volver al valor por defecto,
+   sin cambiar los archivos de juego, para comprobar la migración por política.
 
 ## Controles táctiles
 

@@ -21,6 +21,11 @@ val appVersionName: String = providers.gradleProperty("mkxpz.versionName")
 val appName = providers.gradleProperty("mkxpz.appName").getOrElse("MKXP-Z")
 val gameAssets = providers.gradleProperty("mkxpz.gameAssets").orNull?.let { file(it) }
 val gameIcon = providers.gradleProperty("mkxpz.icon").orNull?.let { file(it) }
+val apkOnlyDirs = providers.gradleProperty("mkxpz.apkOnlyDirs").getOrElse("Graphics,Audio")
+    .split(',').map(String::trim).filter(String::isNotEmpty).distinct()
+require(apkOnlyDirs.all { name ->
+    name != "." && name != ".." && name.none { it == '/' || it == '\\' || it.isISOControl() }
+}) { "mkxpz.apkOnlyDirs must be a comma-separated list of top-level game directories" }
 val filteredAssets = layout.buildDirectory.dir("generated/gameBaseAssets")
 val iconResources = layout.buildDirectory.dir("generated/gameIconRes")
 
@@ -75,6 +80,8 @@ android {
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
+        val escapedDirs = apkOnlyDirs.joinToString(",").replace("\"", "\\\"")
+        buildConfigField("String", "APK_ONLY_DIRS", "\"$escapedDirs\"")
         val escapedName = appName.replace("\\", "\\\\").replace("'", "\\'")
             .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
         resValue("string", "app_name", "\"$escapedName\"")
@@ -101,6 +108,10 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -112,7 +123,8 @@ android {
     }
 
     androidResources {
-        noCompress += listOf("ogg", "mp3", "wav", "png", "mid", "midi", "m4a", "aac", "flac", "opus", "mp4", "webm")
+        // Empty extension stores every asset, including extensionless game files.
+        noCompress += ""
     }
 
     // Native code is prebuilt by Meson; Gradle only packages it.

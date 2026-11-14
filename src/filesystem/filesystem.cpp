@@ -283,6 +283,9 @@ struct FileSystemPrivate {
   /* This is for compatibility with games that take Windows'
    * case insensitivity for granted */
   bool havePathCache;
+#ifdef __ANDROID__
+  bool haveApk = false;
+#endif
 };
 
 static void throwPhysfsError(const char *desc) {
@@ -365,6 +368,59 @@ void FileSystem::removePath(const char *path, bool reload) {
     
     if (reload) reloadPathCache();
 }
+
+#ifdef __ANDROID__
+void FileSystem::addApk(const char *path) {
+  if (!path || !*path) return;
+  if (!PHYSFS_mount(path, 0, 1))
+    throwPhysfsError("Error mounting game APK");
+  if (!PHYSFS_setRoot(path, "assets/game")) {
+    PHYSFS_ErrorCode error = PHYSFS_getLastErrorCode();
+    PHYSFS_unmount(path);
+    throw Exception(Exception::PHYSFSError, "Error setting game APK root: %s",
+                    PHYSFS_getErrorByCode(error));
+  }
+  p->haveApk = true;
+}
+
+bool FileSystem::hasApk() const {
+  return p->haveApk;
+}
+
+std::string FileSystem::apkLookup(const char *path) {
+  std::string normalized = normalize(path, false, false);
+  if (normalized == ".") normalized.clear();
+  std::string cached = desensitize(normalized.c_str());
+  if (PHYSFS_exists(cached.c_str())) return cached;
+
+  // Directories aren't in pathCache; resolve components even with the cache off.
+  std::string resolved;
+  size_t start = 0;
+  while (start < normalized.size()) {
+    size_t end = normalized.find('/', start);
+    std::string component = normalized.substr(start, end - start);
+    if (component.empty() || component == "." || component == "..") return normalized;
+    char **entries = PHYSFS_enumerateFiles(resolved.c_str());
+    bool found = false;
+    if (entries) {
+      for (char **entry = entries; *entry; ++entry) {
+        if (SDL_strcasecmp(*entry, component.c_str()) == 0) {
+          component = *entry;
+          found = true;
+          break;
+        }
+      }
+      PHYSFS_freeList(entries);
+    }
+    if (!found) return normalized;
+    if (!resolved.empty()) resolved += '/';
+    resolved += component;
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return resolved;
+}
+#endif
 
 struct CacheEnumData {
   FileSystemPrivate *p;

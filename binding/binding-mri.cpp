@@ -37,6 +37,10 @@
 #include "binding-util.h"
 #include "binding.h"
 
+#ifdef __ANDROID__
+#include "android-apk-filesystem.xxd"
+#endif
+
 #include "sharedstate.h"
 #include "eventthread.h"
 
@@ -1310,12 +1314,21 @@ static void mriBindingExecute() {
     BacktraceData btData;
     
     mriBindingInit();
+
+#ifdef __ANDROID__
+    // Install before custom scripts and preload.rb, not after the game's helpers.
+    if (!shState->fileSystem().hasApk() ||
+        evalScript(newStringUTF8(reinterpret_cast<const char *>(android_apk_filesystem),
+                                 android_apk_filesystem_len), "<android-apk-filesystem>"))
+#endif
+    {
     
-    std::string &customScript = conf.customScript;
-    if (!customScript.empty())
-        runCustomScript(customScript);
-    else
-        runRMXPScripts(btData);
+        std::string &customScript = conf.customScript;
+        if (!customScript.empty())
+            runCustomScript(customScript);
+        else
+            runRMXPScripts(btData);
+    }
     
 #if RAPI_FULL > 187
     VALUE exc = rb_errinfo();

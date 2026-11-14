@@ -38,6 +38,57 @@
 #include <ruby/thread.h>
 #endif
 
+#ifdef __ANDROID__
+#include <physfs.h>
+#include <limits>
+
+RB_METHOD(apkStat) {
+    VALUE path;
+    rb_scan_args(argc, argv, "1", &path);
+    std::string resolved = shState->fileSystem().apkLookup(StringValueCStr(path));
+    PHYSFS_Stat stat;
+    if (!PHYSFS_stat(resolved.c_str(), &stat)) return Qnil;
+    const char *type = stat.filetype == PHYSFS_FILETYPE_DIRECTORY ? "directory" : "file";
+    return rb_ary_new_from_args(2, ID2SYM(rb_intern(type)),
+                               LL2NUM(stat.filetype == PHYSFS_FILETYPE_DIRECTORY ? 0 : stat.filesize));
+}
+
+RB_METHOD(apkRead) {
+    VALUE path;
+    rb_scan_args(argc, argv, "1", &path);
+    std::string resolved = shState->fileSystem().apkLookup(StringValueCStr(path));
+    PHYSFS_Stat stat;
+    if (!PHYSFS_stat(resolved.c_str(), &stat)) rb_syserr_fail(ENOENT, resolved.c_str());
+    if (stat.filetype == PHYSFS_FILETYPE_DIRECTORY) rb_syserr_fail(EISDIR, resolved.c_str());
+    if (stat.filesize < 0 || stat.filesize > std::numeric_limits<long>::max())
+        rb_raise(rb_eIOError, "APK file too large for a Ruby string");
+    VALUE data = rb_str_new(0, static_cast<long>(stat.filesize));
+    PHYSFS_File *file = PHYSFS_openRead(resolved.c_str());
+    if (!file) rb_raise(rb_eIOError, "Cannot open APK file: %s", resolved.c_str());
+    PHYSFS_sint64 count = PHYSFS_readBytes(file, RSTRING_PTR(data), stat.filesize);
+    int closed = PHYSFS_close(file);
+    if (count != stat.filesize || !closed)
+        rb_raise(rb_eIOError, "Cannot read APK file: %s", resolved.c_str());
+    return data;
+}
+
+RB_METHOD(apkEntries) {
+    VALUE path;
+    rb_scan_args(argc, argv, "1", &path);
+    std::string resolved = shState->fileSystem().apkLookup(StringValueCStr(path));
+    PHYSFS_Stat stat;
+    if (!PHYSFS_stat(resolved.c_str(), &stat)) rb_syserr_fail(ENOENT, resolved.c_str());
+    if (stat.filetype != PHYSFS_FILETYPE_DIRECTORY) rb_syserr_fail(ENOTDIR, resolved.c_str());
+    char **entries = PHYSFS_enumerateFiles(resolved.c_str());
+    if (!entries) rb_raise(rb_eIOError, "Cannot enumerate APK directory: %s", resolved.c_str());
+    VALUE result = rb_ary_new();
+    for (char **entry = entries; *entry; ++entry)
+        rb_ary_push(result, rb_utf8_str_new_cstr(*entry));
+    PHYSFS_freeList(entries);
+    return result;
+}
+#endif
+
 static void fileIntFreeInstance(void *inst) {
     SDL_RWops *ops = static_cast<SDL_RWops *>(inst);
     
@@ -264,6 +315,14 @@ RB_METHOD(_marshalLoad) {
 #endif
 
 void fileIntBindingInit() {
+#ifdef __ANDROID__
+    if (shState->fileSystem().hasApk()) {
+        VALUE apk = rb_define_module("MKXPZ_APKFS");
+        _rb_define_module_function(apk, "native_stat", apkStat);
+        _rb_define_module_function(apk, "native_read", apkRead);
+        _rb_define_module_function(apk, "native_entries", apkEntries);
+    }
+#endif
     VALUE klass = rb_define_class("FileInt", rb_cIO);
 #if RAPI_FULL > 187
     rb_define_alloc_func(klass, classAllocate<&FileIntType>);

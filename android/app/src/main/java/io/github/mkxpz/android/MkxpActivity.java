@@ -92,6 +92,7 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
         gameDir = new GameDataInstaller(this).gameDir();
         try {
             Os.setenv(ENV_GAME_DIR, gameDir.getAbsolutePath(), true);
+            Os.setenv("MKXPZ_APK_PATH", getApplicationInfo().sourceDir, true);
             // The enter key of the on-screen keyboard closes the keyboard
             // instead of writing a new line in the text field of the game.
             Os.setenv(ENV_SDL_HIDE_IME, "1", true);
