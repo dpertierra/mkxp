@@ -2,6 +2,7 @@
 .gradle/
 build/
 app/build/
+build-games/
 
 # Prebuilt native libraries (cross-compiled with Meson + NDK, see README.md)
 app/src/main/jniLibs/

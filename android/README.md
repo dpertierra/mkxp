@@ -39,6 +39,61 @@ android/
 
 ## Build
 
+### Un APK por juego (sin recompilar bibliotecas nativas)
+
+Con las bibliotecas ya presentes en `app/src/main/jniLibs/` y el Java de SDL2
+descargado, basta con Bash, `rsync`, las utilidades GNU (`realpath`, `find`,
+`sort`, `xargs`, `sha256sum`), JDK 17 y el SDK:
+
+```bash
+./android/package-game.sh "/ruta/al/juego" io.github.autor.mijuego "Mi juego"
+./android/package-game.sh "/ruta/al/juego" io.github.autor.mijuego "Mi juego" "/ruta/icono.png" -- -Pmkxpz.versionCode=2 -Pmkxpz.versionName=1.1
+```
+
+El resultado es `android/build-games/io.github.autor.mijuego.apk` (debug,
+firmado con la clave debug local). Un `applicationId` distinto permite instalar
+varios juegos a la vez, cada uno con sus datos privados. Para actualizar uno,
+mantén su identificador y clave de firma; aumenta `versionCode` cuando proceda.
+No se compila código nativo ni se instala nada en el teléfono.
+
+El script sincroniza una copia en `android/build-games/<applicationId>/game/`.
+Excluye archivos y carpetas ocultos, ejecutables y accesos directos de escritorio,
+ZIP, `lib64/`, `Game_Linux`, `graphify-out/`, `poke_updater/`, `MapExporter/`,
+`AGENTS.md`, `CLAUDE.md`, `skills-lock.json` y `*.makerstudio`.
+Materializa los enlaces simbólicos y borra de la copia los archivos retirados
+del origen. No modifica la carpeta original. `game.version` es un SHA-256 de
+los nombres y contenidos copiados; un cambio hace que el instalador vuelva a
+extraer los datos al siguiente arranque. Los argumentos tras el icono opcional
+(o tras `--`) se pasan a Gradle.
+
+También se puede usar Gradle directamente desde `android/`:
+
+```bash
+./gradlew assembleDebug -Pmkxpz.applicationId=io.github.autor.mijuego \
+  '-Pmkxpz.appName=Mi juego' -Pmkxpz.gameAssets=/ruta/al/paquete \
+  -Pmkxpz.icon=/ruta/icono.png
+```
+
+- `mkxpz.gameAssets`: directorio con `game/` y `game.version`; sustituye los
+  datos del juego de `app/src/main/assets/`, conservando sus demás assets.
+  Las rutas relativas se resuelven desde `android/app/`.
+- `mkxpz.appName`: nombre de la app en todos los idiomas; por defecto `MKXP-Z`.
+- `mkxpz.icon`: PNG opcional, escalado a 192×192 en `app/build/generated/`,
+  con recurso xxxhdpi y fallback legacy; sin propiedad se mantiene el icono
+  adaptativo de MKXP-Z. Conviene usar una imagen cuadrada.
+
+Los audios, PNG y vídeos habituales se guardan sin compresión en el APK,
+reduciendo el trabajo de empaquetado de juegos grandes (~1,5 GB). Gradle dispone
+de hasta 4 GB de heap: el equipo necesita memoria y espacio libre para la copia,
+los intermedios y el APK. Un build pequeño no valida los límites de un juego
+grande ni los límites de distribución de las tiendas.
+
+Verificación manual: instalar el APK, comprobar nombre/icono, abrir el juego;
+cambiar un dato, volver a empaquetar y actualizar para comprobar la extracción.
+Con otro identificador, comprobar que ambas apps conservan datos separados.
+
+### Compilar el motor y preparar el APK base
+
 Todos los comandos parten de la raíz del repositorio, salvo el bloque Gradle.
 
 ### 1. Herramientas locales, sin sudo

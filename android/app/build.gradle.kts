@@ -1,3 +1,7 @@
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
+
 plugins {
     id("com.android.application")
 }
@@ -14,6 +18,51 @@ val appVersionCode: Int = providers.gradleProperty("mkxpz.versionCode")
     .getOrElse(1)
 val appVersionName: String = providers.gradleProperty("mkxpz.versionName")
     .getOrElse("1.0.0")
+val appName = providers.gradleProperty("mkxpz.appName").getOrElse("MKXP-Z")
+val gameAssets = providers.gradleProperty("mkxpz.gameAssets").orNull?.let { file(it) }
+val gameIcon = providers.gradleProperty("mkxpz.icon").orNull?.let { file(it) }
+val filteredAssets = layout.buildDirectory.dir("generated/gameBaseAssets")
+val iconResources = layout.buildDirectory.dir("generated/gameIconRes")
+
+val filterGameAssets = if (gameAssets != null) {
+    require(gameAssets.resolve("game").isDirectory && gameAssets.resolve("game.version").isFile) {
+        "mkxpz.gameAssets must contain game/ and game.version: $gameAssets"
+    }
+    tasks.register<Sync>("filterGameAssets") {
+        from("src/main/assets") {
+            exclude("game", "game/**", "game.version")
+        }
+        into(filteredAssets)
+    }
+} else null
+
+val generateGameIcon = if (gameIcon != null) {
+    require(gameIcon.isFile && gameIcon.extension.equals("png", ignoreCase = true)) {
+        "mkxpz.icon must be a PNG file: $gameIcon"
+    }
+    tasks.register("generateGameIcon") {
+        inputs.file(gameIcon)
+        outputs.dir(iconResources)
+        doLast {
+            val source = ImageIO.read(gameIcon)
+                ?: throw GradleException("Cannot decode PNG icon: $gameIcon")
+            val scaled = BufferedImage(192, 192, BufferedImage.TYPE_INT_ARGB)
+            val graphics = scaled.createGraphics()
+            try {
+                graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                graphics.drawImage(source, 0, 0, 192, 192, null)
+            } finally {
+                graphics.dispose()
+            }
+            // ponytail: one density plus legacy fallback; add density variants if needed.
+            for (directory in listOf("mipmap-xxxhdpi", "mipmap")) {
+                val output = iconResources.get().file("$directory/mkxpz_game_icon.png").asFile
+                output.parentFile.mkdirs()
+                check(ImageIO.write(scaled, "png", output)) { "PNG encoder unavailable" }
+            }
+        }
+    }
+} else null
 
 android {
     namespace = "io.github.mkxpz.android"
@@ -26,6 +75,12 @@ android {
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
+        val escapedName = appName.replace("\\", "\\\\").replace("'", "\\'")
+            .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+        resValue("string", "app_name", "\"$escapedName\"")
+        manifestPlaceholders["launcherIcon"] = if (gameIcon == null) {
+            "@mipmap/ic_launcher"
+        } else "@mipmap/mkxpz_game_icon"
 
         // arm64 only (see android/meson-cross-arm64.ini)
         ndk {
@@ -49,6 +104,15 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets.getByName("main") {
+        if (gameAssets != null) assets.setSrcDirs(listOf(filteredAssets, gameAssets))
+        if (gameIcon != null) res.srcDir(iconResources)
+    }
+
+    androidResources {
+        noCompress += listOf("ogg", "mp3", "wav", "png", "mid", "midi", "m4a", "aac", "flac", "opus", "mp4", "webm")
     }
 
     // Native code is prebuilt by Meson; Gradle only packages it.
@@ -87,4 +151,6 @@ val checkSdlJava = tasks.register("checkSdlJava") {
 
 tasks.named("preBuild").configure {
     dependsOn(checkSdlJava)
+    filterGameAssets?.let { dependsOn(it) }
+    generateGameIcon?.let { dependsOn(it) }
 }

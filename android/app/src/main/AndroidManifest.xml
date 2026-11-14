@@ -27,7 +27,7 @@
         android:allowBackup="false"
         android:appCategory="game"
         android:hardwareAccelerated="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="${launcherIcon}"
         android:isGame="true"
         android:label="@string/app_name"
         android:theme="@style/GameTheme">
