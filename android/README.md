@@ -377,30 +377,56 @@ Verificación manual (teléfono, ambas orientaciones):
 ### Reasignar botones del mando
 
 **Engranaje > Mando** abre un panel con los mismos componentes y estilos del
-editor táctil. Lista las reasignaciones actuales, por ejemplo **Botón A → C**.
-**+ Botón** pide pulsar un botón del mando y después permite elegir su tecla
-en la cuadrícula compartida con el editor. **Tecla física** captura una tecla
-del teclado; **Lista de teclas** vuelve a la cuadrícula. Los botones del mando
-se consumen mientras el panel está abierto, incluida la liberación del botón
-capturado, para que esas pulsaciones no lleguen al juego. La capa también
-bloquea los toques fuera del panel.
+editor táctil. La lista siempre muestra los 16 botones, sus teclas actuales y
+una breve indicación para Essentials en C, X, Z y Esc. Un punto de color marca
+las filas que difieren del valor por defecto. Estas son las asignaciones
+iniciales, explícitas en Java y equivalentes al teclado RGSS1:
 
-Cada fila permite cambiar la tecla o eliminar la reasignación. **Restaurar**
-vacía el mapa y recupera las asignaciones predeterminadas del motor al guardar.
-**Cancelar** descarta los cambios; **Guardar** escribe el archivo y activa el
-mapa. Si falla la escritura, el panel conserva los cambios y permite reintentar.
-Atrás cancela una captura o vuelve a la lista; desde la lista cierra sin guardar.
-Al pausar la app o girar la pantalla se descartan los cambios pendientes.
+| Botón | Tecla | Uso habitual en Essentials |
+|---|---|---|
+| A | C | Aceptar |
+| B | X | Atrás / Menú |
+| X | Z | Acción/Correr |
+| Y | A | |
+| L1 / R1 | Q / W | |
+| L2 / R2 | Sin asignar | |
+| L3 / R3 | S / D | Pulsación de los sticks |
+| Start | Esc | Atrás / Menú |
+| Select | Sin asignar | |
+| D-pad ↑ ↓ ← → | Flechas ↑ ↓ ← → | Movimiento |
+
+Los botones comparten una altura mínima de 48 dp, padding y separación vertical;
+las filas no alinean sus hijos por baseline. Los contenedores de scroll reservan
+padding arriba y abajo para dibujar completos los bordes redondeados. En vertical,
+el editor, el menú del engranaje y Mando limitan su altura a la banda libre sobre
+el juego y desplazan su contenido internamente cuando no cabe. Se reutiliza la
+estimación de imagen 4:3 del pad; con menos de 100 dp útiles arriba, usan el área
+segura de la pantalla.
+
+Pulsar un botón físico mientras el panel está abierto resalta su fila y la
+desplaza a la vista, sin activar el juego. Tocar una fila abre la cuadrícula
+de teclas compartida con el editor. **Sin asignar** muestra **—** y desactiva
+el botón; **Por defecto** recupera la asignación de esa fila. **Tecla física**
+captura una tecla del teclado; **Lista de teclas** vuelve a la cuadrícula.
+Pulsar el mando desde el selector vuelve a identificar su fila en la lista.
+La capa también bloquea los toques fuera del panel.
+
+**Restaurar todo** pide confirmación dentro del panel y devuelve todo el mapa
+a sus valores iniciales. **Cancelar** descarta los cambios; **Guardar** escribe
+el archivo y activa el mapa. Si falla la escritura, el panel conserva los
+cambios y permite reintentar. Atrás cancela una captura, selector o confirmación;
+desde la lista cierra sin guardar. Al pausar la app o girar la pantalla se
+descartan los cambios pendientes.
 
 El archivo es `<filesDir>/gamepad_map.json`, compartido por todos los mandos y
 ambas orientaciones, separado de los layouts táctiles y de los datos del juego:
 
 ```json
 {
-  "BUTTON_A": "C",
-  "BUTTON_B": "X",
+  "BUTTON_A": "ENTER",
+  "BUTTON_B": "NONE",
   "BUTTON_START": "ENTER",
-  "DPAD_UP": "DPAD_UP"
+  "DPAD_UP": "W"
 }
 ```
 
@@ -409,45 +435,59 @@ Las claves son nombres de botones Android sin `KEYCODE_`: `BUTTON_A/B/X/Y`,
 `BUTTON_1` a `BUTTON_16`, `DPAD_UP/DOWN/LEFT/RIGHT/CENTER`, las diagonales
 `DPAD_UP_LEFT/UP_RIGHT/DOWN_LEFT/DOWN_RIGHT` o `BACK` si lo emite el mando.
 Los valores usan los mismos nombres de teclas que los layouts del
-pad (`C`, `ENTER`, `SHIFT_LEFT`, `DPAD_UP`, etc.). Las entradas desconocidas se
-ignoran con aviso en el log. Sin archivo, o con `{}`, no hay reasignaciones.
-La escritura usa `AtomicFile` para conservar el archivo anterior si falla.
+pad (`C`, `ENTER`, `SHIFT_LEFT`, `DPAD_UP`, etc.); `"NONE"` o `null` indican
+sin asignar. Solo se guardan diferencias respecto a los valores por defecto;
+sin archivo o con `{}` se aplica la tabla anterior. Los archivos del formato
+anterior siguen siendo válidos. Las asignaciones antiguas de botones
+adicionales se conservan, aunque no tienen fila en el panel; Restaurar todo
+también las borra al guardar. Las entradas desconocidas se ignoran con aviso
+en el log. La escritura usa `AtomicFile` para conservar el archivo anterior
+si falla.
 
 `MkxpActivity.dispatchKeyEvent` intercepta los botones antes del despacho de
 SDL. Comprueba el origen del evento y también
 `SDLControllerManager.isDeviceSDLJoystick`: algunos mandos publican sus
-botones con origen de teclado. Para un botón reasignado envía directamente
-`SDLActivity.onNativeKeyDown/Up` con la tecla de destino y consume el original.
+botones con origen de teclado. Para cada botón de la tabla envía directamente
+`SDLActivity.onNativeKeyDown/Up` con la tecla mostrada y consume el original,
+incluso cuando usa su valor por defecto. Sin asignar consume sin enviar tecla.
 Así evita la ruta `SDLSurface.onKey > SDLActivity.handleKeyEvent >
 SDLControllerManager.onNativePadDown/Up`, que recibiría el botón del mando.
-Los botones sin reasignar siguen esa ruta habitual; los sticks y los gatillos
-que solo emiten ejes analógicos conservan su comportamiento. No se usa la
+Los botones adicionales sin asignación explícita siguen esa ruta habitual;
+los sticks y los gatillos que solo emiten ejes analógicos conservan su
+comportamiento. No se usa la
 ventana adicional del menú F1 del motor ni se modifica código nativo.
 
-Se ignoran las repeticiones de botones reasignados mientras están pulsados.
+Se ignoran las repeticiones de botones interceptados mientras están pulsados.
 El seguimiento distingue dispositivo y botón, y permite que varios botones
-mantengan una misma tecla hasta soltar el último. Se sueltan las teclas al
+mantengan una misma tecla hasta soltar el último. Cada liberación usa la tecla
+enviada al pulsar, aunque el mapa cambie antes de soltar. Se sueltan las teclas al
 abrir un editor, perder el foco, pausar o desconectar el mando. Las pulsaciones
 reasignadas siguen contando como entrada física para ocultar el pad; un toque
 en pantalla vuelve a mostrarlo.
 
 Verificación manual (Bluetooth y USB, español e inglés):
 
-1. Abrir Mando, añadir A y asignarle C mediante la cuadrícula. Guardar y probar
-   pulsación, repetición y liberación. Confirmar que la captura no acciona el
-   juego y que los botones sin reasignar y ambos sticks siguen funcionando.
-2. Cambiar A mediante Tecla física y asignar otro botón a la misma tecla.
-   Mantener ambos y soltarlos por separado; comprobar que se libera al soltar
-   el último. Probar también L1/R1, Start/Select y cruceta si emiten teclas.
+1. Abrir Mando sin archivo de mapa: comprobar las 16 filas y la tabla anterior.
+   Pulsar cada botón y comprobar resaltado y scroll sin acciones en el juego.
+   Probar también desde el selector y la confirmación de restauración.
+2. Cambiar A con la cuadrícula y B con Tecla física; comprobar el punto de
+   cambio, Sin asignar y Por defecto. Guardar y probar repetición, liberación,
+   Start/Esc y ambos sticks. L2/R2 y Select sin asignar no deben activar nada
+   si emiten botones; los ejes analógicos conservan la ruta SDL.
 3. Cancelar cambios y restauraciones; reabrir y comprobar el mapa guardado.
-   Guardar, reiniciar la app y comprobar persistencia. Restaurar y guardar:
-   deben volver las asignaciones predeterminadas.
+   Guardar, reiniciar y comprobar persistencia. Probar un mapa antiguo y
+   valores NONE/null. Restaurar todo y guardar debe dejar `{}` y los defaults.
+   Asignar dos botones a una tecla y soltarlos por separado: se libera al
+   soltar el último.
 4. Mantener un botón y pausar, abrir el panel o desconectar el mando; comprobar
    que no queda una tecla pulsada. Girar durante la captura: debe cerrarse sin
    guardar. Comprobar ocultación por entrada física y recuperación al tocar.
 5. Con teclado, recorrer lista y cuadrícula con Tab/Enter y cancelar con
    Escape/Atrás. Revisar scroll e insets en ambas orientaciones y los logs
-   de la app si falla la carga o el guardado.
+   de la app si falla la carga o el guardado. Revisar bordes inferiores de todos
+   los botones en editor, engranaje y Mando, también al final del scroll. En
+   vertical, comprobar que el panel queda sobre la imagen sin tapar su primera
+   línea, y que se puede acceder a todas las acciones mediante scroll.
 
 ## Configuración
 

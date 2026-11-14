@@ -206,11 +206,12 @@ public final class TouchControlsView extends FrameLayout {
         Rect safe = new Rect();
         getSafeBounds(safe);
         safe.inset(dp(8), dp(8));
+        constrainPanelToUpperBand(safe);
         if (safe.width() <= 0 || safe.height() <= 0) return;
 
         LinearLayout items = new LinearLayout(getContext());
         items.setOrientation(LinearLayout.VERTICAL);
-        items.setPadding(dp(4), dp(4), dp(4), dp(4));
+        items.setPadding(dp(8), dp(4), dp(8), dp(4));
         items.addView(menuButton(R.string.controls_editor_title, v -> {
             dismissQuickMenu();
             beginEditing();
@@ -239,8 +240,14 @@ public final class TouchControlsView extends FrameLayout {
         items.addView(fpsToggle, new LinearLayout.LayoutParams(-1, -2));
         items.addView(menuButton(R.string.controls_hide, v -> setControlsVisible(false)),
                 new LinearLayout.LayoutParams(-1, -2));
+        for (int i = 0; i < items.getChildCount() - 1; i++) {
+            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) items.getChildAt(i).getLayoutParams();
+            params.bottomMargin = dp(4);
+        }
 
         ScrollView content = new ScrollView(getContext());
+        content.setPadding(0, dp(4), 0, dp(4));
+        content.setClipToPadding(false);
         content.addView(items, new ScrollView.LayoutParams(-1, -2));
         int width = Math.min(dp(232), safe.width());
         content.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
@@ -278,16 +285,15 @@ public final class TouchControlsView extends FrameLayout {
         button.setTextColor(new ColorStateList(new int[][]{
                 new int[]{android.R.attr.state_focused}, new int[]{}},
                 new int[]{0xFFFFC850, 0xFFF4F4F6}));
-        button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        button.setMinHeight(dp(48));
-        button.setMinimumHeight(dp(48));
-        button.setPadding(dp(12), 0, dp(12), 0);
         button.setBackgroundTintList(null);
         button.setStateListAnimator(null);
         GradientDrawable face = menuBackground(0xFF303744);
         face.setStroke(dp(1), 0xFF7D8798);
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF),
                 face, null));
+        ControlsEditorUi.fitButton(button);
+        button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        button.setPadding(dp(12), dp(6), dp(12), dp(6));
         button.setOnClickListener(listener);
         return button;
     }
@@ -410,6 +416,15 @@ public final class TouchControlsView extends FrameLayout {
         bounds.intersect(Math.max(0, left - location[0]), Math.max(0, top - location[1]),
                 getRootView().getWidth() - right - location[0],
                 getRootView().getHeight() - bottom - location[1]);
+    }
+
+    /** Keep portrait panels above the picture; their ScrollView handles taller content. */
+    void constrainPanelToUpperBand(Rect bounds) {
+        if (getHeight() <= getWidth()) return;
+        // ponytail: use the existing 4:3 game estimate; use native viewport bounds if exposed later.
+        int gameTop = (int) Math.floor((getHeight() - getWidth() * 0.75f) / 2f);
+        int bottom = Math.min(bounds.bottom, gameTop - dp(8));
+        if (bottom - bounds.top >= dp(100)) bounds.bottom = bottom;
     }
 
     @Override

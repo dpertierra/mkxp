@@ -14,9 +14,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -24,9 +26,32 @@ import java.util.TreeMap;
 /** One saved button map for all controllers, with per-device held-key tracking. */
 final class GamepadMapping {
     private static final String TAG = "GamepadMapping";
+    private static final int SDL_BUTTON = -1;
+    // RGSS1 keyboard equivalents, intercepted even when no overrides are saved.
+    private static final Map<Integer, Integer> DEFAULTS;
+    static {
+        Map<Integer, Integer> defaults = new LinkedHashMap<>();
+        defaults.put(KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_C);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_X);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_Z);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_A);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_Q);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_W);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_UNKNOWN);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_R2, KeyEvent.KEYCODE_UNKNOWN);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_S);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_THUMBR, KeyEvent.KEYCODE_D);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ESCAPE);
+        defaults.put(KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_UNKNOWN);
+        defaults.put(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_UP);
+        defaults.put(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN);
+        defaults.put(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_LEFT);
+        defaults.put(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT);
+        DEFAULTS = Collections.unmodifiableMap(defaults);
+    }
     private final AtomicFile file;
     private final Map<Integer, Integer> bindings = new TreeMap<>();
-    // UNKNOWN means the original down was forwarded to SDL's controller path.
+    // SDL_BUTTON means the original down was forwarded to SDL's controller path.
     private final Map<Long, Integer> pressed = new HashMap<>();
     private final Set<Long> suppressed = new HashSet<>();
 
@@ -42,7 +67,8 @@ final class GamepadMapping {
                 Object value = json.get(name);
                 int key = value instanceof String ? TouchControlsConfig.keyCode((String) value)
                         : KeyEvent.KEYCODE_UNKNOWN;
-                if (isButton(button) && key != KeyEvent.KEYCODE_UNKNOWN) {
+                boolean unassigned = value == JSONObject.NULL || "NONE".equalsIgnoreCase(String.valueOf(value));
+                if (isButton(button) && (unassigned || key != KeyEvent.KEYCODE_UNKNOWN)) {
                     bindings.put(button, key);
                 } else {
                     Log.w(TAG, "Ignoring invalid mapping for " + name);
@@ -54,25 +80,35 @@ final class GamepadMapping {
     }
 
     Map<Integer, Integer> copyBindings() {
-        return new TreeMap<>(bindings);
+        Map<Integer, Integer> result = new LinkedHashMap<>(DEFAULTS);
+        result.putAll(bindings);
+        return result;
+    }
+
+    static Map<Integer, Integer> defaultBindings() {
+        return DEFAULTS;
     }
 
     boolean save(Map<Integer, Integer> draft) {
         FileOutputStream out = null;
         try {
             JSONObject json = new JSONObject();
+            Map<Integer, Integer> overrides = new TreeMap<>();
             for (Map.Entry<Integer, Integer> entry : draft.entrySet()) {
-                if (!isButton(entry.getKey()) || entry.getValue() == KeyEvent.KEYCODE_UNKNOWN) {
+                int key = entry.getValue() == null ? KeyEvent.KEYCODE_UNKNOWN : entry.getValue();
+                if (!isButton(entry.getKey()) || key < KeyEvent.KEYCODE_UNKNOWN
+                        || key > KeyEvent.getMaxKeyCode()) {
                     throw new IllegalArgumentException("Invalid gamepad mapping");
                 }
-                json.put(keyName(entry.getKey()), keyName(entry.getValue()));
+                if (Integer.valueOf(key).equals(DEFAULTS.get(entry.getKey()))) continue;
+                overrides.put(entry.getKey(), key);
+                json.put(keyName(entry.getKey()), key == KeyEvent.KEYCODE_UNKNOWN ? "NONE" : keyName(key));
             }
             out = file.startWrite();
             out.write(json.toString(2).getBytes(StandardCharsets.UTF_8));
             file.finishWrite(out);
-            releaseAll();
             bindings.clear();
-            bindings.putAll(draft);
+            bindings.putAll(overrides);
             return true;
         } catch (Exception e) {
             if (out != null) file.failWrite(out);
@@ -116,11 +152,11 @@ final class GamepadMapping {
             if (suppressed.remove(id)) return true;
             if (held != null) {
                 pressed.remove(id);
-                if (held == KeyEvent.KEYCODE_UNKNOWN) return false;
+                if (held == SDL_BUTTON) return false;
                 releaseKey(held);
                 return true;
             }
-            return blocked || bindings.containsKey(event.getKeyCode());
+            return blocked || bindings.containsKey(event.getKeyCode()) || DEFAULTS.containsKey(event.getKeyCode());
         }
         if (blocked) {
             if (held != null) {
@@ -131,13 +167,15 @@ final class GamepadMapping {
             return true;
         }
         if (suppressed.contains(id)) return true;
-        if (held != null) return held != KeyEvent.KEYCODE_UNKNOWN;
-        Integer key = bindings.get(event.getKeyCode());
+        if (held != null) return held != SDL_BUTTON;
+        Integer key = bindings.getOrDefault(event.getKeyCode(), DEFAULTS.get(event.getKeyCode()));
         if (event.getAction() != KeyEvent.ACTION_DOWN) return key != null;
         // Ignore orphan repeats after a pause, disconnect or panel interaction.
         if (event.getRepeatCount() > 0 && key != null) return true;
-        if (key != null && !pressed.containsValue(key)) SDLActivity.onNativeKeyDown(key);
-        pressed.put(id, key == null ? KeyEvent.KEYCODE_UNKNOWN : key);
+        if (key != null && key != KeyEvent.KEYCODE_UNKNOWN && !pressed.containsValue(key)) {
+            SDLActivity.onNativeKeyDown(key);
+        }
+        pressed.put(id, key == null ? SDL_BUTTON : key);
         return key != null;
     }
 
@@ -159,7 +197,7 @@ final class GamepadMapping {
     }
 
     private void releaseButton(long id, int key) {
-        if (key == KeyEvent.KEYCODE_UNKNOWN) {
+        if (key == SDL_BUTTON) {
             if (SDLControllerManager.onNativePadUp((int) (id >> 32), (int) id) != 0) {
                 SDLActivity.onNativeKeyUp((int) id);
             }
@@ -170,7 +208,7 @@ final class GamepadMapping {
 
     private void releaseKey(int key) {
         // ponytail: scan held buttons; use key reference counts if controller counts grow.
-        if (!pressed.containsValue(key)) SDLActivity.onNativeKeyUp(key);
+        if (key != KeyEvent.KEYCODE_UNKNOWN && !pressed.containsValue(key)) SDLActivity.onNativeKeyUp(key);
     }
 
     private static long buttonId(KeyEvent event) {

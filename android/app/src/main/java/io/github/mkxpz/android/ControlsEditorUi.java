@@ -14,6 +14,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.function.IntConsumer;
@@ -41,7 +42,21 @@ class ControlsEditorUi {
     LinearLayout row() {
         LinearLayout layout = new LinearLayout(activity);
         layout.setGravity(Gravity.CENTER_VERTICAL);
+        // Mixed text/button baselines can move a button below the row's measured bounds.
+        layout.setBaselineAligned(false);
+        layout.setPadding(0, dp(2), 0, dp(2));
         return layout;
+    }
+
+    ScrollView scrollPanel() {
+        ScrollView panel = new ScrollView(activity);
+        panel.setFillViewport(false);
+        panel.setPadding(0, dp(4), 0, dp(4));
+        panel.setClipToPadding(false);
+        panel.setBackground(background(SURFACE, dp(16)));
+        panel.setElevation(dp(6));
+        panel.setClickable(true);
+        return panel;
     }
 
     TextView text(int resource, int sp, int color) {
@@ -61,18 +76,28 @@ class ControlsEditorUi {
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         button.setTextColor(new ColorStateList(new int[][]{
                 new int[]{android.R.attr.state_focused}, new int[]{}}, new int[]{ACCENT, INK}));
-        button.setMinWidth(dp(40));
-        button.setMinimumWidth(dp(40));
-        button.setMinHeight(dp(40));
-        button.setMinimumHeight(dp(40));
-        button.setPadding(dp(8), dp(4), dp(8), dp(4));
         button.setBackgroundTintList(null);
         button.setStateListAnimator(null);
         GradientDrawable face = background(0xFF303744, dp(10));
         face.setStroke(dp(1), 0xFF7D8798);
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF), face, null));
+        fitButton(button);
         button.setOnClickListener(listener);
         return button;
+    }
+
+    static void fitButton(Button button) {
+        float density = button.getResources().getDisplayMetrics().density;
+        int height = Math.round(48 * density);
+        int width = Math.round(40 * density);
+        button.setMinWidth(width);
+        button.setMinimumWidth(width);
+        button.setMinHeight(height);
+        button.setMinimumHeight(height);
+        button.setIncludeFontPadding(true);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(Math.round(8 * density), Math.round(6 * density),
+                Math.round(8 * density), Math.round(6 * density));
     }
 
     Button primaryButton(int resource, View.OnClickListener listener) {

@@ -138,12 +138,8 @@ final class TouchControlsEditor extends ControlsEditorUi {
     }
 
     private void buildPanel() {
-        panel = new ScrollView(activity);
-        panel.setFillViewport(false);
-        panel.setBackground(background(SURFACE, dp(16)));
-        panel.setElevation(dp(6));
+        panel = scrollPanel();
         // Empty panel space must not become a drag or a touch on the game.
-        panel.setClickable(true);
         LinearLayout content = column();
         content.setPadding(dp(8), dp(4), dp(8), dp(8));
         panel.addView(content, new ScrollView.LayoutParams(-1, -2));
@@ -306,14 +302,8 @@ final class TouchControlsEditor extends ControlsEditorUi {
         boolean portrait = view.getHeight() > view.getWidth();
         moveButton.setVisibility(portrait ? View.GONE : View.VISIBLE);
         if (portrait) dock = 0;
+        if (labelInput == null) view.constrainPanelToUpperBand(safe);
         int available = safe.height();
-        if (portrait && labelInput == null) {
-            int gameTop = Math.round((view.getHeight() - view.getWidth() * 0.75f) / 2f);
-            int upperBand = gameTop - safe.top - dp(8);
-            if (upperBand >= dp(100)) {
-                available = Math.min(available, upperBand);
-            }
-        }
         // Measure the actual scroll content; weighted body heights used to squeeze out its actions.
         panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST));

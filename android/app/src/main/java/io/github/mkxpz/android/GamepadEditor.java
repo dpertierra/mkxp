@@ -1,8 +1,12 @@
 package io.github.mkxpz.android;
 
 import android.app.Activity;
+import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -13,6 +17,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Inline gamepad remapping; only Save changes the active map. */
@@ -24,9 +30,10 @@ final class GamepadEditor extends ControlsEditorUi {
     private ScrollView panel;
     private LinearLayout content;
     private Map<Integer, Integer> draft;
-    private boolean waitingForButton;
+    private final Map<Integer, View> buttonRows = new HashMap<>();
     private boolean waitingForKey;
     private int selectedButton = KeyEvent.KEYCODE_UNKNOWN;
+    private int identifiedButton = KeyEvent.KEYCODE_UNKNOWN;
     private int capturedKey = KeyEvent.KEYCODE_UNKNOWN;
 
     GamepadEditor(Activity activity, TouchControlsView view, GamepadMapping mapping, Runnable onClose) {
@@ -51,10 +58,7 @@ final class GamepadEditor extends ControlsEditorUi {
             // Block touches outside the panel from reaching the pad or the game.
             overlay.setClickable(true);
             overlay.setFocusableInTouchMode(true);
-            panel = new ScrollView(activity);
-            panel.setBackground(background(SURFACE, dp(16)));
-            panel.setElevation(dp(6));
-            panel.setClickable(true);
+            panel = scrollPanel();
             content = column();
             content.setPadding(dp(8), dp(4), dp(8), dp(8));
             panel.addView(content, new ScrollView.LayoutParams(-1, -2));
@@ -62,6 +66,7 @@ final class GamepadEditor extends ControlsEditorUi {
             view.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
         }
         draft = mapping.copyBindings();
+        identifiedButton = KeyEvent.KEYCODE_UNKNOWN;
         overlay.setVisibility(View.VISIBLE);
         showBindings();
         overlay.requestFocus();
@@ -72,14 +77,14 @@ final class GamepadEditor extends ControlsEditorUi {
         boolean wasShowing = isShowing();
         if (overlay != null) overlay.setVisibility(View.GONE);
         draft = null;
-        waitingForButton = false;
         waitingForKey = false;
         selectedButton = KeyEvent.KEYCODE_UNKNOWN;
+        buttonRows.clear();
         if (wasShowing) onClose.run();
     }
 
     void onBackPressed() {
-        if (waitingForButton || selectedButton != KeyEvent.KEYCODE_UNKNOWN) showBindings();
+        if (selectedButton != KeyEvent.KEYCODE_UNKNOWN || buttonRows.isEmpty()) showBindings();
         else hide();
     }
 
@@ -92,9 +97,10 @@ final class GamepadEditor extends ControlsEditorUi {
         if (!isShowing()) return false;
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0;
         if (GamepadMapping.isGamepadEvent(event) && GamepadMapping.isButton(code)) {
-            if (down && waitingForButton) {
-                selectedButton = code;
-                showKeyPicker();
+            if (down && GamepadMapping.defaultBindings().containsKey(code)) {
+                identifiedButton = code;
+                if (buttonRows.isEmpty()) showBindings();
+                else identifyButton();
             }
             return true;
         }
@@ -119,6 +125,7 @@ final class GamepadEditor extends ControlsEditorUi {
     }
 
     private void heading(int title) {
+        buttonRows.clear();
         content.removeAllViews();
         TextView heading = text(title, 16, INK);
         heading.setTypeface(null, Typeface.BOLD);
@@ -128,43 +135,53 @@ final class GamepadEditor extends ControlsEditorUi {
     }
 
     private void showBindings() {
-        waitingForButton = false;
         waitingForKey = false;
         selectedButton = KeyEvent.KEYCODE_UNKNOWN;
         heading(R.string.gamepad_title);
-        if (draft.isEmpty()) content.addView(text(R.string.gamepad_empty, 14, MUTED));
-        for (Map.Entry<Integer, Integer> entry : draft.entrySet()) {
+        TextView hint = text(R.string.gamepad_hint, 14, MUTED);
+        hint.setSingleLine(true);
+        hint.setEllipsize(TextUtils.TruncateAt.END);
+        hint.setTooltipText(hint.getText());
+        content.addView(hint);
+        for (Map.Entry<Integer, Integer> entry : GamepadMapping.defaultBindings().entrySet()) {
             int buttonCode = entry.getKey();
+            int key = draft.get(buttonCode);
+            boolean changed = key != entry.getValue();
             LinearLayout row = row();
-            TextView label = text(R.string.gamepad_binding, 14, INK);
-            label.setText(activity.getString(R.string.gamepad_binding,
-                    buttonName(buttonCode), GamepadMapping.keyName(entry.getValue())));
-            label.setSingleLine(true);
-            label.setEllipsize(TextUtils.TruncateAt.END);
+            row.setMinimumHeight(dp(48));
+            row.setPadding(dp(8), dp(6), dp(8), dp(6));
+            row.setFocusable(true);
+            GradientDrawable normal = background(0xFF303744, dp(10));
+            GradientDrawable highlighted = background(0xFF303744, dp(10));
+            highlighted.setStroke(dp(2), ACCENT);
+            StateListDrawable states = new StateListDrawable();
+            states.addState(new int[]{android.R.attr.state_activated}, highlighted);
+            states.addState(new int[]{android.R.attr.state_focused}, highlighted);
+            states.addState(new int[]{}, normal);
+            row.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF), states, null));
+            TextView label = text(R.string.gamepad_title, 14, changed ? ACCENT : INK);
+            label.setText(changed ? "• " + buttonName(buttonCode) : buttonName(buttonCode));
             row.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
-            Button change = button(R.string.controls_editor_key, v -> {
+            TextView assignment = text(R.string.gamepad_title, 14, INK);
+            assignment.setText(keyLabel(key));
+            assignment.setGravity(Gravity.RIGHT);
+            row.addView(assignment, new LinearLayout.LayoutParams(0, -2, 2));
+            String description = activity.getString(R.string.gamepad_binding,
+                    buttonName(buttonCode), key == KeyEvent.KEYCODE_UNKNOWN
+                            ? activity.getString(R.string.gamepad_unassigned) : keyLabel(key));
+            if (changed) description += ", " + activity.getString(R.string.gamepad_changed);
+            row.setContentDescription(description);
+            row.setOnClickListener(v -> {
                 selectedButton = buttonCode;
                 showKeyPicker();
             });
-            change.setContentDescription(activity.getString(R.string.gamepad_change, buttonName(buttonCode)));
-            row.addView(change);
-            Button delete = button(R.string.controls_editor_delete, v -> {
-                draft.remove(buttonCode);
-                showBindings();
-            });
-            delete.setTextColor(0xFFFFB5B0);
-            delete.setContentDescription(activity.getString(R.string.gamepad_delete, buttonName(buttonCode)));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
-            params.leftMargin = dp(4);
-            row.addView(delete, params);
-            content.addView(row);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+            params.topMargin = dp(4);
+            content.addView(row, params);
+            buttonRows.put(buttonCode, row);
         }
         LinearLayout actions = row();
-        addAction(actions, button(R.string.controls_editor_add, v -> showButtonCapture()));
-        addAction(actions, button(R.string.controls_editor_restore, v -> {
-            draft.clear();
-            showBindings();
-        }));
+        addAction(actions, button(R.string.gamepad_restore_all, v -> showRestoreConfirmation()));
         content.addView(actions);
         LinearLayout footer = row();
         addAction(footer, button(R.string.controls_editor_cancel, v -> hide()));
@@ -180,19 +197,25 @@ final class GamepadEditor extends ControlsEditorUi {
         }));
         content.addView(footer);
         positionPanel();
+        identifyButton();
     }
 
-    private void showButtonCapture() {
-        waitingForButton = true;
+    private void showRestoreConfirmation() {
+        waitingForKey = false;
         selectedButton = KeyEvent.KEYCODE_UNKNOWN;
-        heading(R.string.gamepad_capture_button);
-        content.addView(text(R.string.gamepad_capture_hint, 14, MUTED));
-        content.addView(button(R.string.controls_editor_cancel, v -> showBindings()));
+        heading(R.string.gamepad_restore_title);
+        content.addView(text(R.string.gamepad_restore_message, 14, MUTED));
+        LinearLayout actions = row();
+        addAction(actions, button(R.string.controls_editor_cancel, v -> showBindings()));
+        addAction(actions, primaryButton(R.string.gamepad_restore_all, v -> {
+            draft = new LinkedHashMap<>(GamepadMapping.defaultBindings());
+            showBindings();
+        }));
+        content.addView(actions);
         positionPanel();
     }
 
     private void showKeyPicker() {
-        waitingForButton = false;
         waitingForKey = false;
         heading(R.string.controls_editor_key);
         TextView hint = text(R.string.gamepad_choose_key, 14, MUTED);
@@ -202,6 +225,11 @@ final class GamepadEditor extends ControlsEditorUi {
         addAction(actions, button(R.string.controls_editor_cancel, v -> showBindings()));
         addAction(actions, button(R.string.controls_editor_physical_key, v -> showKeyCapture()));
         content.addView(actions);
+        LinearLayout defaults = row();
+        addAction(defaults, button(R.string.gamepad_unassigned, v -> chooseKey(KeyEvent.KEYCODE_UNKNOWN)));
+        addAction(defaults, button(R.string.gamepad_default, v ->
+                chooseKey(GamepadMapping.defaultBindings().get(selectedButton))));
+        content.addView(defaults);
         content.addView(keyGrid(panelWidth(), this::chooseKey));
         positionPanel();
     }
@@ -223,9 +251,45 @@ final class GamepadEditor extends ControlsEditorUi {
     }
 
     private String buttonName(int code) {
+        switch (code) {
+            case KeyEvent.KEYCODE_BUTTON_THUMBL: return "L3";
+            case KeyEvent.KEYCODE_BUTTON_THUMBR: return "R3";
+            case KeyEvent.KEYCODE_BUTTON_START: return "Start";
+            case KeyEvent.KEYCODE_BUTTON_SELECT: return "Select";
+            case KeyEvent.KEYCODE_DPAD_UP: return "D-pad ↑";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "D-pad ↓";
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "D-pad ←";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "D-pad →";
+        }
         String name = GamepadMapping.keyName(code);
-        return name.startsWith("BUTTON_")
-                ? activity.getString(R.string.gamepad_button_name, name.substring("BUTTON_".length())) : name;
+        return name.startsWith("BUTTON_") ? name.substring("BUTTON_".length()) : name;
+    }
+
+    private String keyLabel(int key) {
+        switch (key) {
+            case KeyEvent.KEYCODE_UNKNOWN: return "—";
+            case KeyEvent.KEYCODE_C: return activity.getString(R.string.gamepad_key_c);
+            case KeyEvent.KEYCODE_X: return activity.getString(R.string.gamepad_key_x);
+            case KeyEvent.KEYCODE_Z: return activity.getString(R.string.gamepad_key_z);
+            case KeyEvent.KEYCODE_ESCAPE: return activity.getString(R.string.gamepad_key_escape);
+            case KeyEvent.KEYCODE_DPAD_UP: return "↑";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "↓";
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "←";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "→";
+            default: return GamepadMapping.keyName(key);
+        }
+    }
+
+    private void identifyButton() {
+        for (Map.Entry<Integer, View> entry : buttonRows.entrySet()) {
+            entry.getValue().setActivated(entry.getKey() == identifiedButton);
+        }
+        View row = buttonRows.get(identifiedButton);
+        if (row == null) return;
+        panel.post(() -> {
+            if (!isShowing() || buttonRows.get(identifiedButton) != row) return;
+            panel.smoothScrollTo(0, row.getTop());
+        });
     }
 
     private void addAction(LinearLayout row, Button button) {
@@ -245,6 +309,7 @@ final class GamepadEditor extends ControlsEditorUi {
         Rect safe = new Rect();
         view.getSafeBounds(safe);
         safe.inset(dp(8), dp(8));
+        view.constrainPanelToUpperBand(safe);
         if (safe.width() <= 0 || safe.height() <= 0) return;
         int width = Math.min(dp(400), safe.width());
         panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
