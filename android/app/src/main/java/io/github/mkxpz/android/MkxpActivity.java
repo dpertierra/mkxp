@@ -171,7 +171,7 @@ public final class MkxpActivity extends SDLActivity {
             return true;
         }
         if (touchControls != null && isPhysicalInput(event.getSource())
-                && !touchControls.isEditing()) {
+                && !isOnScreenKeyboard(event) && !touchControls.isEditing()) {
             // A keyboard or a pad is in use: the on-screen pad is not needed.
             touchControls.setControlsVisible(false);
         }
@@ -216,6 +216,9 @@ public final class MkxpActivity extends SDLActivity {
                 pressReturn();
             }
             imeClosedByKey = false;
+            if (touchControls != null) {
+                touchControls.setControlsVisible(true);
+            }
         }
         imeShown = shown;
     }
@@ -234,6 +237,12 @@ public final class MkxpActivity extends SDLActivity {
             touchControls.setControlsVisible(false);
         }
         return super.onGenericMotionEvent(event);
+    }
+
+    /** True for keys typed on the on-screen keyboard, which is not a physical device. */
+    private static boolean isOnScreenKeyboard(KeyEvent event) {
+        InputDevice device = event.getDevice();
+        return device == null || device.isVirtual();
     }
 
     /** True for keyboards, game pads and joysticks (not for the screen). */
