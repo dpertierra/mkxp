@@ -1027,8 +1027,15 @@ public final class TouchControlsView extends FrameLayout {
 
     /** Adds a button and selects it. */
     public void addButton() {
+        float w = getWidth();
+        float h = getHeight();
+        float unit = Math.min(w, h);
+        /* Same size as the buttons already there, so it fits in with them. */
+        float size = controls.isEmpty() || unit <= 0f ? 0.130f
+                : controls.get(controls.size() - 1).r * 2f / unit;
+        float[] spot = freeSpot(w, h, size * unit / 2f);
         TouchControlsConfig.Spec spec = new TouchControlsConfig.Spec(
-                "?", KeyEvent.KEYCODE_ENTER, 0.5f, 0.5f, 0.130f, false, false);
+                "?", KeyEvent.KEYCODE_ENTER, spot[0], spot[1], size, false, false);
         config.buttons.add(spec);
         Control control = new Control(spec);
         controls.add(control);
@@ -1036,6 +1043,53 @@ public final class TouchControlsView extends FrameLayout {
         selected = control;
         invalidate();
         notifyEditor();
+    }
+
+    /**
+     * Finds where a new button of radius {@code r} can go: outside the game
+     * picture and away from the other controls, starting at the bottom right,
+     * where the other buttons are. Falls back to the middle of the screen.
+     *
+     * @return x and y as screen fractions
+     */
+    private float[] freeSpot(float w, float h, float r) {
+        if (w <= 0f || h <= 0f || r <= 0f) {
+            return new float[] {0.5f, 0.5f};
+        }
+        float gameW = Math.min(w, h * GAME_ASPECT);
+        float gameH = Math.min(h, w / GAME_ASPECT);
+        float gameL = (w - gameW) / 2f;
+        float gameT = (h - gameH) / 2f;
+        float step = r * 2f + 0.016f * Math.min(w, h);
+        for (float y = h - step / 2f; y >= step / 2f; y -= step / 2f) {
+            for (float x = w - step / 2f; x >= step / 2f; x -= step / 2f) {
+                boolean onGame = x + r > gameL && x - r < gameL + gameW
+                        && y + r > gameT && y - r < gameT + gameH;
+                if (!onGame && isFree(x, y, step / 2f)) {
+                    return new float[] {x / w, y / h};
+                }
+            }
+        }
+        return new float[] {0.5f, 0.5f};
+    }
+
+    /** True when a circle of radius {@code r} touches no control nor the gear. */
+    private boolean isFree(float x, float y, float r) {
+        List<Control> all = new ArrayList<>(controls);
+        if (dpad != null) all.add(dpad);
+        if (toggle != null) all.add(toggle);
+        for (Control control : all) {
+            float dx = x - control.cx;
+            float dy = y - control.cy;
+            float min = r + control.r;
+            if (dx * dx + dy * dy < min * min) {
+                return false;
+            }
+        }
+        float dx = x - gearX;
+        float dy = y - gearY;
+        float min = r + gearR;
+        return dx * dx + dy * dy >= min * min;
     }
 
     /** Removes the selected button. */
