@@ -299,22 +299,50 @@ El botón de engranaje de la esquina superior izquierda del pad abre el
 editor. Mientras el editor está abierto no se manda ninguna tecla al juego y
 las teclas que estaban pulsadas se sueltan.
 
+El panel oscuro respeta las barras de estado/navegación y el recorte de la
+cámara, incluso si están ocultos. En vertical prefiere la franja negra sobre
+el juego; en horizontal aparece centrado arriba, entre los controles laterales.
+Busca otra posición si hay controles debajo, dando prioridad al seleccionado.
+**Mover panel** recorre seis posiciones (centro y esquinas, arriba y abajo), y
+**Plegar / Desplegar** permite liberar espacio sin salir del editor.
+El ancho se limita a la pantalla y a 400 dp; si falta altura, el contenido
+central se desplaza verticalmente, con Cancelar y Guardar visibles al desplegarlo.
+Los botones tienen objetivos táctiles de al menos 48 dp. Los textos del editor
+se muestran en español o inglés según el idioma de Android.
+
 | Botón | Qué hace |
 |---|---|
-| `Hide` | Esconde la barra para poder mover los controles que quedan debajo. El engranaje la vuelve a mostrar. |
-| `+` | Añade un botón nuevo (con la tecla Intro y la etiqueta `?`) y lo selecciona. |
-| `-` | Borra el botón seleccionado. |
-| `Key` | Elige la tecla: lista con las letras, los números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab y las flechas, o `Press a key...` para usar la tecla que mande el teclado o el mando. |
-| `Text` | Cambia la etiqueta del botón. |
-| `Size` | Cambia el tamaño del botón con un deslizador. |
-| `Def` | Borra solo el archivo de usuario de la orientación actual y vuelve al layout del juego o al de por defecto. |
-| `Cancel` | Descarta los cambios y cierra el editor. |
-| `Done` | Guarda el layout en el archivo de usuario de la orientación actual y cierra el editor. |
+| Añadir botón | Añade un botón nuevo (con la tecla Intro y la etiqueta `?`) y lo selecciona. |
+| Restaurar | Carga el layout del juego para la orientación actual o el predeterminado. Es provisional hasta pulsar Guardar; Cancelar también descarta la restauración. |
+| Cancelar | Descarta los cambios y cierra el editor. |
+| Guardar | Guarda el layout en el archivo de usuario de la orientación actual y cierra el editor. |
+| Asignar tecla | Elige letras, números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab o flechas. «Pulsar una tecla física…» abre la captura del teclado o mando; Atrás cancela. |
+| Nombre | Cambia la etiqueta del botón. |
+| Tamaño | Deslizador en el propio panel; muestra el diámetro como porcentaje del lado más corto de la pantalla. |
+| Eliminar | Borra el botón seleccionado. |
+
+Sin selección aparece «Toca un botón para editarlo · arrástralo para moverlo».
+Al seleccionar un botón aparecen su nombre, tecla y acciones; un aro ámbar lo
+resalta sobre el pad. Para la cruceta se muestra solo el tamaño; su movimiento
+sigue disponible arrastrándola. El pad conserva la ocultación automática al
+usar teclado/mando y reaparece al tocar la pantalla.
 
 Los botones y la cruceta se mueven arrastrándolos. Las posiciones se guardan
 como fracciones de la pantalla, por separado para vertical y horizontal.
 Al cambiar de orientación se recarga el layout correspondiente. Si el editor
 está abierto, se cierra y descarta los cambios sin guardar.
+
+Verificación manual (teléfono, ambas orientaciones):
+
+1. Abrir el editor con Android en español; comprobar recorte de cámara, barras,
+   Guardar/Cancelar y desplazamiento del panel. Probar Mover panel y Plegar.
+2. Seleccionar y arrastrar botones y cruceta; cambiar tamaño, nombre y tecla
+   (lista y teclado/mando), añadir y eliminar un botón.
+3. Cancelar tras editar o Restaurar y reabrir: debe conservarse el diseño
+   guardado. Guardar y reabrir: deben conservarse los cambios.
+4. Girar con cambios pendientes: deben descartarse y cargarse los controles
+   de la nueva orientación. Comprobar que teclado/mando aún oculta el pad y
+   que tocar la pantalla lo recupera.
 
 ## Configuración
 

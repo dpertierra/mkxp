@@ -5,11 +5,14 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
+import android.os.Build;
 import android.util.SparseArray;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
 
 import org.libsdl.app.SDLActivity;
@@ -123,6 +126,7 @@ public final class TouchControlsView extends FrameLayout {
 
     /* Editor state. */
     private EditListener editListener;
+    private Runnable editorListener;
     private boolean editing;
     private Control selected;
     private Control dragged;
@@ -158,6 +162,7 @@ public final class TouchControlsView extends FrameLayout {
         dragged = null;
         layout(getWidth(), getHeight());
         invalidate();
+        notifyEditor();
     }
 
     /** The layout of the pad, as it is now (the editor changes it). */
@@ -171,6 +176,80 @@ public final class TouchControlsView extends FrameLayout {
 
     public boolean isEditing() {
         return editing;
+    }
+
+    void setEditorListener(Runnable listener) {
+        editorListener = listener;
+    }
+
+    private void notifyEditor() {
+        if (editorListener != null && editing) {
+            editorListener.run();
+        }
+    }
+
+    /** Insets are in window coordinates; SDL may already offset this view. */
+    void getSafeBounds(Rect bounds) {
+        bounds.set(0, 0, getWidth(), getHeight());
+        WindowInsets insets = getRootWindowInsets();
+        if (insets == null) return;
+        int left;
+        int top;
+        int right;
+        int bottom;
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.graphics.Insets bars = insets.getInsetsIgnoringVisibility(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            left = bars.left;
+            top = bars.top;
+            right = bars.right;
+            bottom = bars.bottom;
+        } else {
+            left = insets.getStableInsetLeft();
+            top = insets.getStableInsetTop();
+            right = insets.getStableInsetRight();
+            bottom = insets.getStableInsetBottom();
+            if (Build.VERSION.SDK_INT >= 28 && insets.getDisplayCutout() != null) {
+                left = Math.max(left, insets.getDisplayCutout().getSafeInsetLeft());
+                top = Math.max(top, insets.getDisplayCutout().getSafeInsetTop());
+                right = Math.max(right, insets.getDisplayCutout().getSafeInsetRight());
+                bottom = Math.max(bottom, insets.getDisplayCutout().getSafeInsetBottom());
+            }
+        }
+        int[] location = new int[2];
+        getLocationInWindow(location);
+        bounds.intersect(Math.max(0, left - location[0]), Math.max(0, top - location[1]),
+                getRootView().getWidth() - right - location[0],
+                getRootView().getHeight() - bottom - location[1]);
+    }
+
+    @Override
+    public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        WindowInsets result = super.onApplyWindowInsets(insets);
+        layout(getWidth(), getHeight());
+        notifyEditor();
+        invalidate();
+        return result;
+    }
+
+    /** Choose a panel anchor away from controls, especially the selection. */
+    float editorOverlap(Rect panel) {
+        float overlap = 0;
+        for (Control control : controls) {
+            if (!control.spec.secondary || secondaryVisible) overlap += overlap(control, panel);
+        }
+        if (dpad != null) overlap += overlap(dpad, panel);
+        if (toggle != null) overlap += overlap(toggle, panel);
+        return overlap;
+    }
+
+    private float overlap(Control control, Rect panel) {
+        float r = control.r * 1.12f;
+        float width = Math.max(0, Math.min(control.cx + r, panel.right)
+                - Math.max(control.cx - r, panel.left));
+        float height = Math.max(0, Math.min(control.cy + r, panel.bottom)
+                - Math.max(control.cy - r, panel.top));
+        return width * height * (control == selected ? 100 : 1);
     }
 
     /* ------------------------------------------------------------ layout */
@@ -197,9 +276,11 @@ public final class TouchControlsView extends FrameLayout {
         float gap = 0.016f * unit;
         float margin = 0.030f * unit;
 
-        gearR = 0.035f * unit;
-        gearX = margin + gearR;
-        gearY = margin + gearR;
+        Rect safe = new Rect();
+        getSafeBounds(safe);
+        gearR = Math.max(0.035f * unit, 24f * getResources().getDisplayMetrics().density);
+        gearX = safe.left + margin + gearR;
+        gearY = safe.top + margin + gearR;
 
         if (isAbsolute()) {
             /* Every control says where it goes. */
@@ -453,6 +534,7 @@ public final class TouchControlsView extends FrameLayout {
                 if (hit == HIT_NONE || hit == HIT_TOGGLE) {
                     selected = null;
                     invalidate();
+                    notifyEditor();
                     return true;
                 }
                 selected = hit == HIT_DPAD ? dpad : controls.get(hit);
@@ -464,6 +546,7 @@ public final class TouchControlsView extends FrameLayout {
                 dragOffsetX = x - selected.cx;
                 dragOffsetY = y - selected.cy;
                 invalidate();
+                notifyEditor();
                 return true;
             }
             case MotionEvent.ACTION_MOVE: {
@@ -476,6 +559,7 @@ public final class TouchControlsView extends FrameLayout {
                 }
                 moveTo(dragged, event.getX(index) - dragOffsetX, event.getY(index) - dragOffsetY);
                 invalidate();
+                notifyEditor();
                 return true;
             }
             case MotionEvent.ACTION_UP:
@@ -685,6 +769,7 @@ public final class TouchControlsView extends FrameLayout {
      */
     public void beginEditing() {
         releaseAllKeys();
+        controlsVisible = true;
         float w = getWidth();
         float h = getHeight();
         for (Control control : controls) {
@@ -739,6 +824,7 @@ public final class TouchControlsView extends FrameLayout {
         layout(getWidth(), getHeight());
         selected = control;
         invalidate();
+        notifyEditor();
     }
 
     /** Removes the selected button. */
@@ -750,6 +836,7 @@ public final class TouchControlsView extends FrameLayout {
         config.buttons.remove(selected.spec);
         selected = null;
         invalidate();
+        notifyEditor();
     }
 
     /** Gives the selected control a new key. */
@@ -758,6 +845,7 @@ public final class TouchControlsView extends FrameLayout {
             return;
         }
         selected.spec.keyCode = keyCode;
+        notifyEditor();
     }
 
     /** Gives the selected control a new label. */
@@ -767,6 +855,7 @@ public final class TouchControlsView extends FrameLayout {
         }
         selected.spec.label = label;
         invalidate();
+        notifyEditor();
     }
 
     /** Gives the selected control a new size. */
@@ -777,6 +866,7 @@ public final class TouchControlsView extends FrameLayout {
         selected.spec.size = size;
         layout(getWidth(), getHeight());
         invalidate();
+        notifyEditor();
     }
 
     /* ----------------------------------------------------------- drawing */
@@ -810,6 +900,15 @@ public final class TouchControlsView extends FrameLayout {
         }
         if (toggle != null) {
             drawToggle(canvas, stroke);
+        }
+        if (editing && selected != null) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(0xFF191D26);
+            paint.setStrokeWidth(stroke * 5);
+            canvas.drawCircle(selected.cx, selected.cy, selected.r + stroke * 2, paint);
+            paint.setColor(0xFFFFC850);
+            paint.setStrokeWidth(stroke * 2);
+            canvas.drawCircle(selected.cx, selected.cy, selected.r + stroke * 2, paint);
         }
         drawGear(canvas);
     }

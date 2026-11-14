@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="controls_editor_title">Editar controles</string>
+    <string name="controls_editor_move">Mover panel</string>
+    <string name="controls_editor_collapse">Plegar</string>
+    <string name="controls_editor_expand">Desplegar</string>
+    <string name="controls_editor_hint">Toca un botón para editarlo · arrástralo para moverlo</string>
+    <string name="controls_editor_selected">Seleccionado: %1$s · %2$s</string>
+    <string name="controls_editor_dpad">Seleccionada: cruceta</string>
+    <string name="controls_editor_key">Asignar tecla</string>
+    <string name="controls_editor_name">Nombre</string>
+    <string name="controls_editor_size">Tamaño</string>
+    <string name="controls_editor_size_value">Tamaño · %1$d%%</string>
+    <string name="controls_editor_delete">Eliminar</string>
+    <string name="controls_editor_layout">Diseño del pad</string>
+    <string name="controls_editor_add">Añadir botón</string>
+    <string name="controls_editor_restore">Restaurar</string>
+    <string name="controls_editor_cancel">Cancelar</string>
+    <string name="controls_editor_save">Guardar</string>
+    <string name="controls_editor_apply">Aplicar</string>
+    <string name="controls_editor_capture_key">Pulsar una tecla física…</string>
+    <string name="controls_editor_press_key">Pulsa una tecla del teclado o del mando. Atrás cancela; usa la lista si el sistema intercepta una tecla.</string>
+    <string name="controls_editor_restore_title">¿Restaurar el diseño?</string>
+    <string name="controls_editor_restore_message">Carga el diseño del juego para esta orientación o el pad predeterminado. Pulsa Guardar para conservarlo o Cancelar para descartarlo.</string>
+    <string-array name="controls_editor_special_keys">
+        <item>Intro</item>
+        <item>Esc</item>
+        <item>Espacio</item>
+        <item>Mayús</item>
+        <item>Ctrl</item>
+        <item>Alt</item>
+        <item>Tabulador</item>
+        <item>Arriba</item>
+        <item>Abajo</item>
+        <item>Izquierda</item>
+        <item>Derecha</item>
+    </string-array>
+</resources>

@@ -131,8 +131,8 @@ public final class MkxpActivity extends SDLActivity {
 
         @Override
         public void onRestoreDefaults() {
-            TouchControlsConfig.deleteUserFile(MkxpActivity.this);
-            touchControls.setConfig(TouchControlsConfig.load(MkxpActivity.this, gameDir));
+            touchControls.setConfig(TouchControlsConfig.loadGameLayout(MkxpActivity.this, gameDir));
+            touchControls.beginEditing();
         }
     };
 

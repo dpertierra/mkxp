@@ -102,7 +102,12 @@ public final class TouchControlsConfig {
         if (config != null) {
             return config;
         }
-        config = loadFile(new File(gameDir, FILE_NAME), orientation);
+        return loadGameLayout(context, gameDir);
+    }
+
+    /** Layout shipped by the game, without the user's saved override. */
+    public static TouchControlsConfig loadGameLayout(Context context, File gameDir) {
+        TouchControlsConfig config = loadFile(new File(gameDir, FILE_NAME), orientationName(context));
         if (config != null) {
             return config;
         }
