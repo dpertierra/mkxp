@@ -51,6 +51,7 @@ final class TouchControlsEditor {
     private final Callback callback;
 
     private View toolbar;
+    private AlertDialog dialog;
     private boolean waitingForKey;
 
     TouchControlsEditor(Activity activity, TouchControlsView view, Callback callback) {
@@ -75,6 +76,10 @@ final class TouchControlsEditor {
     /** Hides the bar of the editor. */
     void hide() {
         waitingForKey = false;
+        if (dialog != null) {
+            dialog.dismiss();
+            dialog = null;
+        }
         if (toolbar != null) {
             toolbar.setVisibility(View.GONE);
         }
@@ -160,7 +165,7 @@ final class TouchControlsEditor {
         }
         final String[] names = keyNames();
         final int[] codes = keyCodes();
-        new AlertDialog.Builder(activity)
+        dialog = new AlertDialog.Builder(activity)
                 .setTitle("Key")
                 .setItems(names, (dialog, which) -> {
                     if (which == 0) {
@@ -183,7 +188,7 @@ final class TouchControlsEditor {
         final EditText input = new EditText(activity);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setText(view.getSelectedSpec().label);
-        new AlertDialog.Builder(activity)
+        dialog = new AlertDialog.Builder(activity)
                 .setTitle("Text")
                 .setView(input)
                 .setPositiveButton("OK", (dialog, which) ->
@@ -201,7 +206,7 @@ final class TouchControlsEditor {
         bar.setMax(100);
         float size = view.getSelectedSpec().size;
         bar.setProgress(Math.round((size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE) * 100f));
-        new AlertDialog.Builder(activity)
+        dialog = new AlertDialog.Builder(activity)
                 .setTitle("Size")
                 .setView(bar)
                 .setPositiveButton("OK", (dialog, which) ->
@@ -212,9 +217,9 @@ final class TouchControlsEditor {
     }
 
     private void showRestoreDialog() {
-        new AlertDialog.Builder(activity)
+        dialog = new AlertDialog.Builder(activity)
                 .setTitle("Restore defaults")
-                .setMessage("The layout of the user is deleted.")
+                .setMessage("The user layout for the current orientation is deleted.")
                 .setPositiveButton("Restore", (dialog, which) -> callback.onRestoreDefaults())
                 .setNegativeButton("Cancel", null)
                 .show();

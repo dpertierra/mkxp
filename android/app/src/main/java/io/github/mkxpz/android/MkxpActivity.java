@@ -1,5 +1,6 @@
 package io.github.mkxpz.android;
 
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -56,6 +57,8 @@ public final class MkxpActivity extends SDLActivity {
     /** Editor of the on-screen pad. */
     private TouchControlsEditor controlsEditor;
 
+    private int controlsOrientation;
+
     /** Folder with the installed game data. */
     private File gameDir;
 
@@ -93,6 +96,7 @@ public final class MkxpActivity extends SDLActivity {
 
         // mLayout is null when SDL could not start (broken libraries).
         if (mLayout != null) {
+            controlsOrientation = getResources().getConfiguration().orientation;
             // The layout of the editor wins over the one of the game, which
             // wins over the built-in one.
             TouchControlsConfig config = TouchControlsConfig.load(this, gameDir);
@@ -131,6 +135,17 @@ public final class MkxpActivity extends SDLActivity {
             touchControls.setConfig(TouchControlsConfig.load(MkxpActivity.this, gameDir));
         }
     };
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (touchControls != null && controlsOrientation != newConfig.orientation) {
+            controlsOrientation = newConfig.orientation;
+            // ponytail: cancel edits on rotation; preserving them would need per-orientation drafts.
+            touchControls.endEditing();
+            touchControls.setConfig(TouchControlsConfig.load(this, gameDir));
+        }
+    }
 
     @Override
     protected void onPause() {

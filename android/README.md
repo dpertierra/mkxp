@@ -219,12 +219,20 @@ Un juego puede traer su propio layout en `<gameDir>/android_controls.json`
 Si el archivo no existe o no es válido se usa el layout por defecto y se avisa
 en el log (`adb logcat -s TouchControls`).
 
-El editor de la app escribe su layout en `<filesDir>/controls_user.json`, con
-el mismo formato. El orden de carga es:
+El editor guarda un layout independiente por orientación, con el mismo formato:
 
-1. `<filesDir>/controls_user.json` (el del editor).
+- Vertical: `<filesDir>/controls_user_portrait.json`.
+- Horizontal: `<filesDir>/controls_user_landscape.json`.
+
+El orden de carga para la orientación actual es:
+
+1. El archivo de usuario de esa orientación (el del editor).
 2. `<gameDir>/android_controls.json` (el del juego).
-3. El layout por defecto.
+3. El layout por defecto, cuya cuadrícula se adapta a ambas orientaciones.
+
+Una orientación nunca editada usa el layout del juego o el de por defecto.
+El antiguo `<filesDir>/controls_user.json` se ignora y se borra al cargar:
+no contiene información de orientación y hay que volver a editar el pad.
 
 ```json
 {
@@ -237,6 +245,31 @@ el mismo formato. El orden de carga es:
   "toggle": {"label": "≡", "x": 0.945, "y": 0.465, "size": 0.075}
 }
 ```
+
+El archivo del juego puede incluir objetos `portrait` y `landscape` en la raíz.
+Cada uno contiene un layout completo con el mismo esquema (`buttons`, `dpad`,
+`toggle`), por ejemplo:
+
+```json
+{
+  "portrait": {
+    "buttons": [
+      {"label": "Z", "key": "Z", "x": 0.70, "y": 0.85, "size": 0.145}
+    ],
+    "dpad": {"x": 0.18, "y": 0.85, "size": 0.300}
+  },
+  "landscape": {
+    "buttons": [
+      {"label": "Z", "key": "Z", "x": 0.90, "y": 0.75, "size": 0.145}
+    ],
+    "dpad": {"x": 0.10, "y": 0.75, "size": 0.300}
+  }
+}
+```
+
+Si no existe el objeto de la orientación actual, se lee el layout de la raíz.
+Así, los archivos anteriores siguen aplicando el mismo layout a ambas
+orientaciones. Si el layout elegido no es válido, se usa el de por defecto.
 
 | Clave | Qué es |
 |---|---|
@@ -274,12 +307,14 @@ las teclas que estaban pulsadas se sueltan.
 | `Key` | Elige la tecla: lista con las letras, los números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab y las flechas, o `Press a key...` para usar la tecla que mande el teclado o el mando. |
 | `Text` | Cambia la etiqueta del botón. |
 | `Size` | Cambia el tamaño del botón con un deslizador. |
-| `Def` | Borra `<filesDir>/controls_user.json` y vuelve al layout del juego o al de por defecto. |
+| `Def` | Borra solo el archivo de usuario de la orientación actual y vuelve al layout del juego o al de por defecto. |
 | `Cancel` | Descarta los cambios y cierra el editor. |
-| `Done` | Guarda el layout en `<filesDir>/controls_user.json` y cierra el editor. |
+| `Done` | Guarda el layout en el archivo de usuario de la orientación actual y cierra el editor. |
 
 Los botones y la cruceta se mueven arrastrándolos. Las posiciones se guardan
-como fracciones de la pantalla, así que el layout sirve en cualquier teléfono.
+como fracciones de la pantalla, por separado para vertical y horizontal.
+Al cambiar de orientación se recarga el layout correspondiente. Si el editor
+está abierto, se cierra y descarta los cambios sin guardar.
 
 ## Configuración
 

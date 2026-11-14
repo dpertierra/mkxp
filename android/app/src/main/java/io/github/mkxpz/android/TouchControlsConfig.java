@@ -1,6 +1,7 @@
 package io.github.mkxpz.android;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.util.Log;
 import android.view.KeyEvent;
 
@@ -23,7 +24,8 @@ import java.util.Locale;
  * <p>The layout comes from the first file that exists:
  *
  * <ol>
- * <li>{@code <filesDir>/controls_user.json}: written by the in-app editor.</li>
+ * <li>{@code <filesDir>/controls_user_portrait.json} or
+ * {@code controls_user_landscape.json}: written by the in-app editor.</li>
  * <li>{@code <gameDir>/android_controls.json}: shipped by the game.</li>
  * <li>The built-in layout.</li>
  * </ol>
@@ -36,9 +38,6 @@ public final class TouchControlsConfig {
 
     /** File read from the game folder. */
     public static final String FILE_NAME = "android_controls.json";
-
-    /** File written by the in-app editor. */
-    public static final String USER_FILE_NAME = "controls_user.json";
 
     /** One control of the pad. */
     public static final class Spec {
@@ -93,11 +92,17 @@ public final class TouchControlsConfig {
      * @return the layout to use, never null
      */
     public static TouchControlsConfig load(Context context, File gameDir) {
-        TouchControlsConfig config = loadFile(new File(context.getFilesDir(), USER_FILE_NAME));
+        // The legacy layout has no orientation information; discard it.
+        File legacy = new File(context.getFilesDir(), "controls_user.json");
+        if (legacy.exists() && !legacy.delete()) {
+            Log.w(TAG, "Could not delete " + legacy);
+        }
+        String orientation = orientationName(context);
+        TouchControlsConfig config = loadFile(userFile(context), orientation);
         if (config != null) {
             return config;
         }
-        config = loadFile(new File(gameDir, FILE_NAME));
+        config = loadFile(new File(gameDir, FILE_NAME), orientation);
         if (config != null) {
             return config;
         }
@@ -105,12 +110,14 @@ public final class TouchControlsConfig {
     }
 
     /** Reads a layout file, or returns null when it cannot be used. */
-    public static TouchControlsConfig loadFile(File file) {
+    public static TouchControlsConfig loadFile(File file, String orientation) {
         if (!file.isFile()) {
             return null;
         }
         try {
-            TouchControlsConfig config = parse(new JSONObject(readFile(file)));
+            JSONObject root = new JSONObject(readFile(file));
+            JSONObject oriented = root.optJSONObject(orientation);
+            TouchControlsConfig config = parse(oriented != null ? oriented : root);
             if (config == null) {
                 Log.w(TAG, "Ignoring " + file + ": no usable button");
             }
@@ -123,7 +130,7 @@ public final class TouchControlsConfig {
 
     /** Writes the layout in the file of the user. */
     public void save(Context context) {
-        File file = new File(context.getFilesDir(), USER_FILE_NAME);
+        File file = userFile(context);
         try {
             String text = toJson().toString(2);
             try (FileOutputStream out = new FileOutputStream(file)) {
@@ -134,17 +141,26 @@ public final class TouchControlsConfig {
         }
     }
 
-    /** Deletes the layout written by the editor, if any. */
+    /** Deletes the layout written by the editor for the current orientation, if any. */
     public static void deleteUserFile(Context context) {
-        File file = new File(context.getFilesDir(), USER_FILE_NAME);
+        File file = userFile(context);
         if (file.exists() && !file.delete()) {
             Log.e(TAG, "Could not delete " + file);
         }
     }
 
-    /** True when the editor has a layout of its own. */
+    /** True when the editor has a layout for the current orientation. */
     public static boolean hasUserFile(Context context) {
-        return new File(context.getFilesDir(), USER_FILE_NAME).isFile();
+        return userFile(context).isFile();
+    }
+
+    private static File userFile(Context context) {
+        return new File(context.getFilesDir(), "controls_user_" + orientationName(context) + ".json");
+    }
+
+    private static String orientationName(Context context) {
+        return context.getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE ? "landscape" : "portrait";
     }
 
     /** The layout in the format of the layout files. */

@@ -146,6 +146,7 @@ public final class TouchControlsView extends FrameLayout {
 
     /** Replaces the layout of the pad. */
     public void setConfig(TouchControlsConfig config) {
+        releaseAllKeys();
         this.config = config;
         controls.clear();
         for (TouchControlsConfig.Spec spec : config.buttons) {
