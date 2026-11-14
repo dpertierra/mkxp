@@ -57,7 +57,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
     private EditText labelInput;
     private TouchControlsConfig.Spec contextTarget;
     private int previousSoftInputMode;
-    private boolean waitingForKey;
+    private ControlsKeyPicker keyPicker;
     private int capturedKey = KeyEvent.KEYCODE_UNKNOWN;
     private boolean collapsed;
     private int dock;
@@ -92,6 +92,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
 
     /** Keep editor input in Android views, including both halves of captured keys. */
     boolean dispatchKeyEvent(KeyEvent event) {
+        if (keyPicker != null && keyPicker.dispatchKeyEvent(event)) return true;
         if (capturedKey != KeyEvent.KEYCODE_UNKNOWN && event.getKeyCode() == capturedKey) {
             if (event.getAction() == KeyEvent.ACTION_UP) {
                 capturedKey = KeyEvent.KEYCODE_UNKNOWN;
@@ -100,7 +101,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
         }
         if (panel == null || panel.getVisibility() != View.VISIBLE) return false;
         int code = event.getKeyCode();
-        if (code == KeyEvent.KEYCODE_BACK || (!waitingForKey && code == KeyEvent.KEYCODE_ESCAPE)) {
+        if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 capturedKey = code;
                 onBackPressed();
@@ -108,12 +109,6 @@ final class TouchControlsEditor extends ControlsEditorUi {
             return true;
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN && code != KeyEvent.KEYCODE_UNKNOWN) {
-            if (waitingForKey) {
-                capturedKey = code;
-                if (contextTarget == view.getSelectedSpec()) view.setSelectedKey(code);
-                finishInteraction();
-                return true;
-            }
             if (labelInput != null && labelInput.hasFocus() && (code == KeyEvent.KEYCODE_ENTER
                     || code == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
                 capturedKey = code;
@@ -132,6 +127,10 @@ final class TouchControlsEditor extends ControlsEditorUi {
     }
 
     boolean cancelInteraction() {
+        if (keyPicker != null && keyPicker.isShowing()) {
+            keyPicker.cancel();
+            return true;
+        }
         if (contextActions == null || contextActions.getVisibility() != View.VISIBLE) return false;
         finishInteraction();
         return true;
@@ -139,6 +138,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
 
     private void buildPanel() {
         panel = scrollPanel();
+        panel.setFocusableInTouchMode(true);
         // Empty panel space must not become a drag or a touch on the game.
         LinearLayout content = column();
         content.setPadding(dp(8), dp(4), dp(8), dp(8));
@@ -185,7 +185,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
         LinearLayout.LayoutParams chipParams = new LinearLayout.LayoutParams(0, -2, 1);
         chipParams.rightMargin = dp(4);
         actions.addView(selection, chipParams);
-        keyButton = button(R.string.controls_editor_key, v -> showKeyCapture());
+        keyButton = button(R.string.controls_editor_key, v -> showKeyPicker());
         nameButton = button(R.string.controls_editor_name, v -> showLabelEditor());
         deleteButton = button(R.string.controls_editor_delete, v -> showDeleteConfirmation());
         deleteButton.setTextColor(0xFFFFB5B0);
@@ -242,6 +242,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
             return;
         }
         TouchControlsConfig.Spec spec = view.getSelectedSpec();
+        if (keyPicker != null && keyPicker.isShowing() && contextTarget != spec) clearInteraction();
         if (contextActions.getVisibility() == View.VISIBLE && contextTarget != spec) clearInteraction();
         boolean interacting = contextActions.getVisibility() == View.VISIBLE;
         hint.setVisibility(!interacting && spec == null ? View.VISIBLE : View.GONE);
@@ -355,7 +356,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
     }
 
     private void clearInteraction() {
-        waitingForKey = false;
+        if (keyPicker != null) keyPicker.hide();
         contextTarget = null;
         if (labelInput != null) {
             InputMethodManager ime = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -374,6 +375,7 @@ final class TouchControlsEditor extends ControlsEditorUi {
         clearInteraction();
         refresh();
         panel.scrollTo(0, 0);
+        panel.requestFocus();
     }
 
     private void addInteractionButtons(int apply, Runnable action) {
@@ -387,24 +389,16 @@ final class TouchControlsEditor extends ControlsEditorUi {
         contextActions.addView(actions);
     }
 
-    private void showKeyCapture() {
+    private void showKeyPicker() {
         if (view.getSelectedSpec() == null) return;
-        startInteraction(R.string.controls_editor_capture_key);
-        waitingForKey = true;
-        contextActions.addView(text(R.string.controls_editor_press_key, 14, MUTED));
-        addInteractionButtons(R.string.controls_editor_key_list, this::showKeyList);
-        refresh();
-    }
-
-    private void showKeyList() {
-        if (view.getSelectedSpec() == null) return;
-        startInteraction(R.string.controls_editor_key);
-        addInteractionButtons(R.string.controls_editor_physical_key, this::showKeyCapture);
-        contextActions.addView(keyGrid(panel.getLayoutParams().width, code -> {
+        clearInteraction();
+        contextTarget = view.getSelectedSpec();
+        view.releaseAllKeys();
+        if (keyPicker == null) keyPicker = new ControlsKeyPicker(activity, view, true);
+        keyPicker.show(activity.getString(R.string.controls_keys_for, contextTarget.label), null, code -> {
             if (contextTarget == view.getSelectedSpec()) view.setSelectedKey(code);
             finishInteraction();
-        }));
-        refresh();
+        }, this::finishInteraction);
     }
 
     private void showLabelEditor() {

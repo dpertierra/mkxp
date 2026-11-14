@@ -321,8 +321,11 @@ Los iconos tienen descripción accesible y una ayuda al mantenerlos pulsados.
 El panel mide lo que ocupa su contenido, con un máximo de 400 dp de ancho.
 Una fila contextual muestra la ayuda o la selección y sus acciones, seguida
 del deslizador de tamaño. La fila inferior reúne **+ Botón**, **Cancelar** y
-**Guardar**, resaltado en ámbar. Si falta altura, todo el panel se desplaza
-verticalmente para poder alcanzar las acciones. Los objetivos táctiles del
+**Guardar**, resaltado en ámbar. El estado normal ocupa aproximadamente 220 dp
+con un botón seleccionado (cabecera, acciones, tamaño y pie), por debajo de los
+360 dp de la banda superior de referencia. No incluye listas de teclas dentro
+de esa banda. Solo si falta altura o aumenta el tamaño de fuente, el panel se
+desplaza verticalmente para poder alcanzar las acciones. Los objetivos táctiles del
 editor miden al menos 40 dp, y los iconos 44 dp. Los textos se muestran en
 español o inglés según el idioma de Android.
 
@@ -332,7 +335,7 @@ español o inglés según el idioma de Android.
 | Restaurar | Carga el layout del juego para la orientación actual o el predeterminado. Es provisional hasta pulsar Guardar; Cancelar también descarta la restauración. |
 | Cancelar | Descarta los cambios y cierra el editor. |
 | Guardar | Guarda el layout en el archivo de usuario de la orientación actual y cierra el editor. |
-| Tecla | Elige letras, números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab o flechas. «Pulsar una tecla física…» abre la captura del teclado o mando; Atrás cancela. |
+| Tecla | Abre el selector modal de letras, números, flechas y especiales (F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt y Tab). «Pulsa una tecla…» activa la captura del teclado o mando; Atrás cancela el selector. |
 | Nombre | Cambia la etiqueta del botón. |
 | Tamaño | Deslizador en el propio panel; muestra el diámetro como porcentaje del lado más corto de la pantalla. |
 | Eliminar | Borra el botón seleccionado. |
@@ -376,10 +379,12 @@ Verificación manual (teléfono, ambas orientaciones):
 
 ### Reasignar botones del mando
 
-**Engranaje > Mando** abre un panel con los mismos componentes y estilos del
-editor táctil. La lista siempre muestra los 16 botones, sus teclas actuales y
+**Engranaje > Mando** abre una hoja modal a pantalla completa sobre el juego,
+con fondo oscurecido y el estilo del editor táctil. Una rejilla agrupa los 16
+botones en **Botones**, **Gatillos**, **Sticks**, **Menú** y **Cruceta**. Cada
+casilla muestra el nombre del botón en grande, su tecla actual debajo y
 una breve indicación para Essentials en C, X, Z y Esc. Un punto de color marca
-las filas que difieren del valor por defecto. Estas son las asignaciones
+las casillas que difieren del valor por defecto. Estas son las asignaciones
 iniciales, explícitas en Java y equivalentes al teclado RGSS1:
 
 | Botón | Tecla | Uso habitual en Essentials |
@@ -395,21 +400,31 @@ iniciales, explícitas en Java y equivalentes al teclado RGSS1:
 | Select | Sin asignar | |
 | D-pad ↑ ↓ ← → | Flechas ↑ ↓ ← → | Movimiento |
 
-Los botones comparten una altura mínima de 48 dp, padding y separación vertical;
-las filas no alinean sus hijos por baseline. Los contenedores de scroll reservan
-padding arriba y abajo para dibujar completos los bordes redondeados. En vertical,
-el editor, el menú del engranaje y Mando limitan su altura a la banda libre sobre
-el juego y desplazan su contenido internamente cuando no cabe. Se reutiliza la
-estimación de imagen 4:3 del pad; con menos de 100 dp útiles arriba, usan el área
-segura de la pantalla.
+En vertical se usan cuatro columnas (dos en pantallas estrechas); Sticks y Menú
+comparten una fila. En horizontal las secciones se reparten en filas más anchas,
+con casillas de al menos 64 dp de alto frente a 80 dp en vertical. La ayuda tiene
+su propia línea y puede envolver, sin puntos suspensivos. **Restaurar todo**,
+**Cancelar** y **Guardar** permanecen en el pie, fuera del área desplazable.
+La rejilla está dimensionada para caber sin scroll a unos 412 × 900 dp y su
+orientación horizontal; el scroll queda como alternativa para áreas pequeñas o
+fuentes ampliadas. La hoja respeta barras del sistema y recorte de cámara.
+Solo el editor del pad y el menú del engranaje conservan la banda sobre la imagen
+4:3; Mando y el selector de teclas pueden cubrir el juego.
 
-Pulsar un botón físico mientras el panel está abierto resalta su fila y la
-desplaza a la vista, sin activar el juego. Tocar una fila abre la cuadrícula
-de teclas compartida con el editor. **Sin asignar** muestra **—** y desactiva
-el botón; **Por defecto** recupera la asignación de esa fila. **Tecla física**
-captura una tecla del teclado; **Lista de teclas** vuelve a la cuadrícula.
-Pulsar el mando desde el selector vuelve a identificar su fila en la lista.
-La capa también bloquea los toques fuera del panel.
+Pulsar un botón físico resalta el borde de su casilla sin activar el juego; si no
+cabe en una pantalla pequeña, también la lleva a la vista. Tocar una casilla abre
+el mismo selector modal de teclas que **Tecla** en el editor táctil. Las teclas se
+agrupan en **Letras**, **Números**, **Flechas** y **Especiales**, con objetivos de
+44 dp y etiquetas ajustadas al ancho. En horizontal los cuatro grupos se colocan
+lado a lado, en lugar de apilarse. El pie queda fijo y solo se desplaza la rejilla
+cuando falta espacio. **Sin asignar** muestra **—** y desactiva el botón;
+**Por defecto** recupera su asignación inicial. Esas dos opciones solo aparecen
+al editar un mando. **Pulsa una tecla…** activa/desactiva la captura física sin
+ocultar la rejilla; desde Mando solo captura teclado, desde el pad también mando.
+Pulsar el mando desde su selector vuelve a identificar su casilla. Atrás/Esc
+cancela el selector (Esc puede asignarse durante la captura). Las capas bloquean
+toques fuera de la hoja y consumen también las liberaciones de teclas que las
+cerraron, sin enviarlas al juego.
 
 **Restaurar todo** pide confirmación dentro del panel y devuelve todo el mapa
 a sus valores iniciales. **Cancelar** descarta los cambios; **Guardar** escribe
@@ -439,7 +454,7 @@ pad (`C`, `ENTER`, `SHIFT_LEFT`, `DPAD_UP`, etc.); `"NONE"` o `null` indican
 sin asignar. Solo se guardan diferencias respecto a los valores por defecto;
 sin archivo o con `{}` se aplica la tabla anterior. Los archivos del formato
 anterior siguen siendo válidos. Las asignaciones antiguas de botones
-adicionales se conservan, aunque no tienen fila en el panel; Restaurar todo
+adicionales se conservan, aunque no tienen casilla en el panel; Restaurar todo
 también las borra al guardar. Las entradas desconocidas se ignoran con aviso
 en el log. La escritura usa `AtomicFile` para conservar el archivo anterior
 si falla.
@@ -467,10 +482,12 @@ en pantalla vuelve a mostrarlo.
 
 Verificación manual (Bluetooth y USB, español e inglés):
 
-1. Abrir Mando sin archivo de mapa: comprobar las 16 filas y la tabla anterior.
-   Pulsar cada botón y comprobar resaltado y scroll sin acciones en el juego.
+1. Abrir Mando sin archivo de mapa: comprobar las 16 casillas y la tabla anterior.
+   A unos 412 × 900 dp y en horizontal, revisar que caben todas sin scroll, con
+   ayuda completa, pie visible e insets libres. Pulsar cada botón y comprobar
+   resaltado sin acciones en el juego.
    Probar también desde el selector y la confirmación de restauración.
-2. Cambiar A con la cuadrícula y B con Tecla física; comprobar el punto de
+2. Cambiar A con la cuadrícula y B con «Pulsa una tecla…»; comprobar el punto de
    cambio, Sin asignar y Por defecto. Guardar y probar repetición, liberación,
    Start/Esc y ambos sticks. L2/R2 y Select sin asignar no deben activar nada
    si emiten botones; los ejes analógicos conservan la ruta SDL.
@@ -482,12 +499,16 @@ Verificación manual (Bluetooth y USB, español e inglés):
 4. Mantener un botón y pausar, abrir el panel o desconectar el mando; comprobar
    que no queda una tecla pulsada. Girar durante la captura: debe cerrarse sin
    guardar. Comprobar ocultación por entrada física y recuperación al tocar.
-5. Con teclado, recorrer lista y cuadrícula con Tab/Enter y cancelar con
-   Escape/Atrás. Revisar scroll e insets en ambas orientaciones y los logs
+5. Con teclado, recorrer casillas y cuadrícula con Tab/Enter y cancelar con
+   Escape/Atrás. Probar captura mantenida y soltar tras cerrar la hoja, sin teclas
+   activas en el juego. Revisar scroll de respaldo con una ventana pequeña o
+   fuente ampliada y los logs
    de la app si falla la carga o el guardado. Revisar bordes inferiores de todos
    los botones en editor, engranaje y Mando, también al final del scroll. En
-   vertical, comprobar que el panel queda sobre la imagen sin tapar su primera
-   línea, y que se puede acceder a todas las acciones mediante scroll.
+   vertical, comprobar que el editor del pad queda sobre la imagen sin tapar su
+   primera línea: cabecera, contexto, tamaño y pie deben caber sin scroll en una
+   banda de unos 360 dp. Abrir **Tecla** desde allí: el selector cubre el juego y
+   muestra todos los grupos sin scroll a tamaño de fuente normal.
 
 ## Configuración
 
