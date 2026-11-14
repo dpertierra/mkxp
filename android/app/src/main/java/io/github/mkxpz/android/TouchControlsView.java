@@ -773,10 +773,22 @@ public final class TouchControlsView extends FrameLayout {
         if (w <= 0 || h <= 0) {
             return;
         }
-        control.spec.grid = false;
+        keepGridSize(control, w, h);
         control.spec.x = clamp(x / w);
         control.spec.y = clamp(y / h);
         place(control, (int) w, (int) h);
+    }
+
+    /**
+     * Leaves the automatic grid. The grid shrinks buttons to fit the free
+     * space, so the size drawn is written too, or the buttons would grow back
+     * to their nominal size and overlap.
+     */
+    private static void keepGridSize(Control control, float w, float h) {
+        if (control.spec.grid && control.r > 0f) {
+            control.spec.size = control.r * 2f / Math.min(w, h);
+        }
+        control.spec.grid = false;
     }
 
     private static float clamp(float value) {
@@ -997,7 +1009,7 @@ public final class TouchControlsView extends FrameLayout {
         if (w <= 0 || h <= 0) {
             return;
         }
-        control.spec.grid = false;
+        keepGridSize(control, w, h);
         control.spec.x = clamp(control.cx / w);
         control.spec.y = clamp(control.cy / h);
     }
