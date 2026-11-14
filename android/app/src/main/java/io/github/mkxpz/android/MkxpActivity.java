@@ -104,6 +104,7 @@ public final class MkxpActivity extends SDLActivity {
             // wins over the built-in one.
             TouchControlsConfig config = TouchControlsConfig.load(this, gameDir);
             touchControls = new TouchControlsView(this, config);
+            touchControls.setFpsToggleListener(this::toggleFps);
             controlsEditor = new TouchControlsEditor(this, touchControls, editorCallback);
             touchControls.setEditListener(editing -> {
                 if (editing) {
@@ -138,14 +139,12 @@ public final class MkxpActivity extends SDLActivity {
             touchControls.setConfig(TouchControlsConfig.loadGameLayout(MkxpActivity.this, gameDir));
             touchControls.beginEditing();
         }
-
-        @Override
-        public void onToggleFps() {
-            SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_F2);
-            handler.postDelayed(() -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_F2),
-                    KEY_HOLD_MS);
-        }
     };
+
+    private void toggleFps() {
+        SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_F2);
+        handler.postDelayed(() -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_F2), KEY_HOLD_MS);
+    }
 
     @Override
     protected void onTitleChanged(CharSequence title, int color) {
@@ -154,12 +153,11 @@ public final class MkxpActivity extends SDLActivity {
     }
 
     private void updateFpsTitle(CharSequence title) {
-        if (touchControls == null || controlsEditor == null) return;
+        if (touchControls == null) return;
         String text = title == null ? "" : title.toString();
         boolean visible = text.endsWith(" FPS");
         Matcher match = FPS_TITLE.matcher(text);
         touchControls.setFpsText(visible ? (match.find() ? match.group(1) : text) : null);
-        controlsEditor.setFpsVisible(visible);
     }
 
     @Override
@@ -177,6 +175,7 @@ public final class MkxpActivity extends SDLActivity {
     protected void onPause() {
         // No key may stay pressed while the engine is not running.
         if (touchControls != null) {
+            touchControls.dismissQuickMenu();
             touchControls.releaseAllKeys();
         }
         handler.removeCallbacks(imeWatcher);

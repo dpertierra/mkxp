@@ -8,14 +8,15 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -28,7 +29,6 @@ final class TouchControlsEditor {
         void onSave(TouchControlsConfig config);
         void onCancel();
         void onRestoreDefaults();
-        void onToggleFps();
     }
 
     private static final float MIN_SIZE = 0.04f;
@@ -42,20 +42,19 @@ final class TouchControlsEditor {
     private final Activity activity;
     private final TouchControlsView view;
     private final Callback callback;
-    private LinearLayout panel;
+    private ScrollView panel;
     private LinearLayout selectionActions;
     private LinearLayout footer;
-    private ScrollView body;
+    private LinearLayout body;
     private TextView hint;
     private TextView selection;
     private TextView sizeLabel;
     private SeekBar sizeBar;
-    private Button foldButton;
+    private ImageButton foldButton;
+    private ImageButton moveButton;
     private Button keyButton;
     private Button nameButton;
     private Button deleteButton;
-    private CheckBox fpsToggle;
-    private boolean fpsVisible;
     private AlertDialog dialog;
     private boolean waitingForKey;
     private TouchControlsConfig.Spec keyTarget;
@@ -95,11 +94,6 @@ final class TouchControlsEditor {
         }
     }
 
-    void setFpsVisible(boolean visible) {
-        fpsVisible = visible;
-        if (fpsToggle != null) fpsToggle.setChecked(visible);
-    }
-
     /** Consume both halves of a captured key, including repeats, before SDL sees it. */
     boolean captureKey(KeyEvent event) {
         if (capturedKey != KeyEvent.KEYCODE_UNKNOWN && event.getKeyCode() == capturedKey) {
@@ -122,51 +116,73 @@ final class TouchControlsEditor {
     }
 
     private void buildPanel() {
-        panel = column();
-        panel.setPadding(dp(10), dp(6), dp(10), dp(10));
+        panel = new ScrollView(activity);
+        panel.setFillViewport(false);
         panel.setBackground(background(SURFACE, dp(16)));
         panel.setElevation(dp(6));
         // Empty panel space must not become a drag or a touch on the game.
         panel.setClickable(true);
+        LinearLayout content = column();
+        content.setPadding(dp(8), dp(4), dp(8), dp(8));
+        panel.addView(content, new ScrollView.LayoutParams(-1, -2));
 
         LinearLayout header = row();
         TextView title = text(R.string.controls_editor_title, 16, INK);
         title.setTypeface(null, Typeface.BOLD);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        Button move = button(R.string.controls_editor_move, v -> {
-            dock = (dock + 1) % 6;
-            positionPanel(false);
-        });
-        LinearLayout.LayoutParams moveParams = new LinearLayout.LayoutParams(0, -2, 1);
-        moveParams.setMargins(dp(6), 0, dp(6), 0);
-        header.addView(move, moveParams);
-        foldButton = button(R.string.controls_editor_collapse, v -> {
+        header.addView(iconButton(R.drawable.ic_controls_restore, R.string.controls_editor_restore,
+                v -> showRestoreDialog()), new LinearLayout.LayoutParams(dp(44), dp(44)));
+        foldButton = iconButton(R.drawable.ic_controls_collapse, R.string.controls_editor_collapse, v -> {
             collapsed = !collapsed;
             refresh();
         });
-        header.addView(foldButton, new LinearLayout.LayoutParams(0, -2, 1));
-        panel.addView(header);
+        header.addView(foldButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        moveButton = iconButton(R.drawable.ic_controls_move, R.string.controls_editor_move, v -> {
+            dock = (dock + 1) % 6;
+            positionPanel(false);
+        });
+        header.addView(moveButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        content.addView(header);
 
-        LinearLayout content = column();
+        body = column();
         hint = text(R.string.controls_editor_hint, 14, MUTED);
-        hint.setPadding(0, dp(8), 0, dp(12));
-        content.addView(hint);
+        hint.setSingleLine(true);
+        hint.setEllipsize(TextUtils.TruncateAt.END);
+        hint.setGravity(Gravity.CENTER_VERTICAL);
+        hint.setMinHeight(dp(40));
+        body.addView(hint);
         selectionActions = column();
-        selection = text(R.string.controls_editor_title, 15, ACCENT);
+        LinearLayout actions = row();
+        selection = text(R.string.controls_editor_title, 14, INK);
         selection.setTypeface(null, Typeface.BOLD);
+        selection.setSingleLine(true);
+        selection.setEllipsize(TextUtils.TruncateAt.END);
+        selection.setGravity(Gravity.CENTER_VERTICAL);
         selection.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        selection.setPadding(0, dp(8), 0, dp(6));
-        selectionActions.addView(selection);
+        selection.setPadding(dp(8), dp(4), dp(8), dp(4));
+        selection.setBackground(background(0xFF303744, dp(6)));
+        LinearLayout.LayoutParams chipParams = new LinearLayout.LayoutParams(0, -2, 1);
+        chipParams.rightMargin = dp(4);
+        actions.addView(selection, chipParams);
         keyButton = button(R.string.controls_editor_key, v -> showKeyDialog());
         nameButton = button(R.string.controls_editor_name, v -> showLabelDialog());
-        selectionActions.addView(pair(keyButton, nameButton));
+        deleteButton = button(R.string.controls_editor_delete, v -> view.deleteSelected());
+        deleteButton.setTextColor(0xFFFFB5B0);
+        for (Button action : new Button[]{keyButton, nameButton, deleteButton}) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+            params.leftMargin = dp(4);
+            actions.addView(action, params);
+        }
+        selectionActions.addView(actions);
 
         LinearLayout sizeRow = row();
         sizeLabel = text(R.string.controls_editor_size, 14, INK);
         sizeRow.addView(sizeLabel);
         sizeBar = new SeekBar(activity);
         sizeBar.setMax(100);
-        sizeBar.setMinHeight(dp(48));
+        sizeBar.setMinHeight(dp(40));
         sizeBar.setThumbTintList(ColorStateList.valueOf(ACCENT));
         sizeBar.setProgressTintList(ColorStateList.valueOf(ACCENT));
         sizeBar.setProgressBackgroundTintList(ColorStateList.valueOf(0xFF727B8C));
@@ -183,43 +199,24 @@ final class TouchControlsEditor {
         });
         sizeRow.addView(sizeBar, new LinearLayout.LayoutParams(0, -2, 1));
         selectionActions.addView(sizeRow);
-        deleteButton = button(R.string.controls_editor_delete, v -> view.deleteSelected());
-        deleteButton.setTextColor(0xFFFFB5B0);
-        selectionActions.addView(deleteButton, new LinearLayout.LayoutParams(-1, -2));
-        content.addView(selectionActions);
-
-        TextView layoutTitle = text(R.string.controls_editor_layout, 14, MUTED);
-        layoutTitle.setPadding(0, dp(12), 0, dp(6));
-        content.addView(layoutTitle);
-        content.addView(pair(button(R.string.controls_editor_add, v -> view.addButton()),
-                button(R.string.controls_editor_restore, v -> showRestoreDialog())));
-        fpsToggle = new CheckBox(activity);
-        fpsToggle.setText(R.string.controls_show_fps);
-        fpsToggle.setTextColor(INK);
-        fpsToggle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        fpsToggle.setButtonTintList(new ColorStateList(new int[][]{
-                new int[]{android.R.attr.state_checked}, new int[]{}}, new int[]{ACCENT, MUTED}));
-        fpsToggle.setMinHeight(dp(48));
-        fpsToggle.setChecked(fpsVisible);
-        fpsToggle.setOnClickListener(v -> {
-            // The engine's next title, including physical F2 presses, sets the checked state.
-            fpsToggle.setChecked(fpsVisible);
-            callback.onToggleFps();
-        });
-        content.addView(fpsToggle);
-        body = new ScrollView(activity);
-        body.setFillViewport(false);
-        body.addView(content);
-        panel.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
+        body.addView(selectionActions);
+        content.addView(body);
 
         Button save = button(R.string.controls_editor_save, v -> callback.onSave(view.getConfig()));
         save.setTextColor(0xFF191D26);
         save.setTypeface(null, Typeface.BOLD);
         save.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55000000),
                 background(ACCENT, dp(10)), null));
-        footer = pair(button(R.string.controls_editor_cancel, v -> callback.onCancel()), save);
-        footer.setPadding(0, dp(8), 0, 0);
-        panel.addView(footer);
+        footer = row();
+        footer.setPadding(0, dp(4), 0, 0);
+        Button add = button(R.string.controls_editor_add, v -> view.addButton());
+        Button cancel = button(R.string.controls_editor_cancel, v -> callback.onCancel());
+        for (Button action : new Button[]{add, cancel, save}) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+            if (action != save) params.rightMargin = dp(4);
+            footer.addView(action, params);
+        }
+        content.addView(footer);
     }
 
     private void refresh() {
@@ -232,7 +229,11 @@ final class TouchControlsEditor {
         if (spec != null) {
             boolean dpad = spec == view.getConfig().dpad;
             selection.setText(dpad ? activity.getString(R.string.controls_editor_dpad)
+                    : spec.label);
+            selection.setContentDescription(dpad ? activity.getString(R.string.controls_editor_dpad)
                     : activity.getString(R.string.controls_editor_selected, spec.label, spec.keyName()));
+            keyButton.setContentDescription(activity.getString(R.string.controls_editor_key)
+                    + ": " + spec.keyName());
             keyButton.setVisibility(dpad ? View.GONE : View.VISIBLE);
             nameButton.setVisibility(dpad ? View.GONE : View.VISIBLE);
             deleteButton.setVisibility(dpad ? View.GONE : View.VISIBLE);
@@ -242,7 +243,11 @@ final class TouchControlsEditor {
         }
         body.setVisibility(collapsed ? View.GONE : View.VISIBLE);
         footer.setVisibility(collapsed ? View.GONE : View.VISIBLE);
-        foldButton.setText(collapsed ? R.string.controls_editor_expand : R.string.controls_editor_collapse);
+        foldButton.setImageResource(collapsed ? R.drawable.ic_controls_expand : R.drawable.ic_controls_collapse);
+        String foldDescription = activity.getString(collapsed ? R.string.controls_editor_expand
+                : R.string.controls_editor_collapse);
+        foldButton.setContentDescription(foldDescription);
+        foldButton.setTooltipText(foldDescription);
         positionPanel(true);
     }
 
@@ -258,28 +263,23 @@ final class TouchControlsEditor {
             return;
         }
         int width = Math.min(dp(400), safe.width());
-        int innerWidth = View.MeasureSpec.makeMeasureSpec(width - panel.getPaddingLeft()
-                - panel.getPaddingRight(), View.MeasureSpec.EXACTLY);
-        int unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int desired = panel.getPaddingTop() + panel.getPaddingBottom();
-        for (int i = 0; i < panel.getChildCount(); i++) {
-            View child = panel.getChildAt(i);
-            if (child.getVisibility() != View.GONE) {
-                child.measure(innerWidth, unspecified);
-                desired += child.getMeasuredHeight();
-            }
-        }
+        boolean portrait = view.getHeight() > view.getWidth();
+        moveButton.setVisibility(portrait ? View.GONE : View.VISIBLE);
+        if (portrait) dock = 0;
         int available = safe.height();
-        if (view.getHeight() > view.getWidth() && (dock == 0 || dock == 2 || dock == 3)) {
+        if (portrait) {
             int gameTop = Math.round((view.getHeight() - view.getWidth() * 0.75f) / 2f);
             int upperBand = gameTop - safe.top - dp(8);
-            if (upperBand >= dp(200)) {
+            if (upperBand >= dp(100)) {
                 available = Math.min(available, upperBand);
             }
         }
-        int height = Math.min(desired, available);
+        // Measure the actual scroll content; weighted body heights used to squeeze out its actions.
+        panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST));
+        int height = panel.getMeasuredHeight();
         Rect bounds = panelBounds(safe, width, height, dock);
-        if (avoidControls) {
+        if (avoidControls && !portrait) {
             // ponytail: six anchors cover phone layouts; free dragging can replace them if needed.
             float best = view.editorOverlap(bounds);
             for (int i = 0; i < 6 && best > 0; i++) {
@@ -324,15 +324,6 @@ final class TouchControlsEditor {
         return layout;
     }
 
-    private LinearLayout pair(View first, View second) {
-        LinearLayout row = row();
-        LinearLayout.LayoutParams a = new LinearLayout.LayoutParams(0, -2, 1);
-        a.rightMargin = dp(6);
-        row.addView(first, a);
-        row.addView(second, new LinearLayout.LayoutParams(0, -2, 1));
-        return row;
-    }
-
     private TextView text(int resource, int sp, int color) {
         TextView text = new TextView(activity);
         text.setText(resource);
@@ -345,18 +336,33 @@ final class TouchControlsEditor {
         Button button = new Button(activity);
         button.setText(resource);
         button.setAllCaps(false);
-        button.setSingleLine(false);
+        button.setSingleLine(true);
+        button.setEllipsize(TextUtils.TruncateAt.END);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         button.setTextColor(new ColorStateList(new int[][]{
                 new int[]{android.R.attr.state_focused}, new int[]{}}, new int[]{ACCENT, INK}));
-        button.setMinWidth(dp(48));
-        button.setMinimumWidth(dp(48));
-        button.setMinHeight(dp(48));
-        button.setMinimumHeight(dp(48));
-        button.setPadding(dp(10), dp(6), dp(10), dp(6));
+        button.setMinWidth(dp(40));
+        button.setMinimumWidth(dp(40));
+        button.setMinHeight(dp(40));
+        button.setMinimumHeight(dp(40));
+        button.setPadding(dp(8), dp(4), dp(8), dp(4));
         GradientDrawable face = background(0xFF303744, dp(10));
         face.setStroke(dp(1), 0xFF7D8798);
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF), face, null));
+        button.setOnClickListener(listener);
+        return button;
+    }
+
+    private ImageButton iconButton(int icon, int description, View.OnClickListener listener) {
+        ImageButton button = new ImageButton(activity);
+        button.setImageResource(icon);
+        button.setImageTintList(new ColorStateList(new int[][]{
+                new int[]{android.R.attr.state_focused}, new int[]{}}, new int[]{ACCENT, INK}));
+        button.setContentDescription(activity.getString(description));
+        button.setTooltipText(activity.getString(description));
+        button.setPadding(dp(10), dp(10), dp(10), dp(10));
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF),
+                background(SURFACE, dp(8)), null));
         button.setOnClickListener(listener);
         return button;
     }

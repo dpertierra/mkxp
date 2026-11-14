@@ -295,38 +295,53 @@ con la cruceta a la izquierda.
 
 ### Editor de los controles
 
-El botón de engranaje de la esquina superior izquierda del pad abre el
-editor. Mientras el editor está abierto el pad no manda teclas al juego y
-las teclas que estaban pulsadas se sueltan.
+El botón de engranaje de la esquina superior izquierda del pad abre un menú
+oscuro junto al engranaje, con tres opciones:
+
+| Opción | Qué hace |
+|---|---|
+| Editar controles | Abre el editor del pad. |
+| Mostrar FPS / Show FPS | Envía F2 al motor para alternar el contador. La casilla refleja los títulos que devuelve el motor; no depende de Guardar/Cancelar. |
+| Ocultar controles | Oculta el pad hasta el siguiente toque en la pantalla. |
+
+Al abrir el menú se sueltan las teclas pulsadas. Mientras el editor está
+abierto el pad no manda teclas al juego.
 
 El panel oscuro respeta las barras de estado/navegación y el recorte de la
 cámara, incluso si están ocultos. En vertical prefiere la franja negra sobre
 el juego; en horizontal aparece centrado arriba, entre los controles laterales.
-Busca otra posición si hay controles debajo, dando prioridad al seleccionado.
-**Mover panel** recorre seis posiciones (centro y esquinas, arriba y abajo), y
-**Plegar / Desplegar** permite liberar espacio sin salir del editor.
-El ancho se limita a la pantalla y a 400 dp; si falta altura, el contenido
-central se desplaza verticalmente, con Cancelar y Guardar visibles al desplegarlo.
-Los botones tienen objetivos táctiles de al menos 48 dp. Los textos del editor
-se muestran en español o inglés según el idioma de Android.
+En horizontal busca otra posición si hay controles debajo, dando prioridad
+al seleccionado. La cabecera mantiene el título en una línea y ofrece iconos
+para **Restaurar**, **Plegar / Desplegar** y, solo en horizontal, **Mover panel**.
+Mover recorre seis posiciones (centro y esquinas, arriba y abajo). Plegar
+libera espacio sin salir del editor; el engranaje también vuelve a desplegarlo.
+Los iconos tienen descripción accesible y una ayuda al mantenerlos pulsados.
+
+El panel mide lo que ocupa su contenido, con un máximo de 400 dp de ancho.
+Una fila contextual muestra la ayuda o la selección y sus acciones, seguida
+del deslizador de tamaño. La fila inferior reúne **+ Botón**, **Cancelar** y
+**Guardar**, resaltado en ámbar. Si falta altura, todo el panel se desplaza
+verticalmente para poder alcanzar las acciones. Los objetivos táctiles del
+editor miden al menos 40 dp, y los iconos 44 dp. Los textos se muestran en
+español o inglés según el idioma de Android.
 
 | Botón | Qué hace |
 |---|---|
-| Añadir botón | Añade un botón nuevo (con la tecla Intro y la etiqueta `?`) y lo selecciona. |
+| + Botón | Añade un botón nuevo (con la tecla Intro y la etiqueta `?`) y lo selecciona. |
 | Restaurar | Carga el layout del juego para la orientación actual o el predeterminado. Es provisional hasta pulsar Guardar; Cancelar también descarta la restauración. |
-| Mostrar FPS / Show FPS | Envía F2 al motor para alternar el contador. La casilla refleja los títulos que devuelve el motor; no depende de Guardar/Cancelar. |
 | Cancelar | Descarta los cambios y cierra el editor. |
 | Guardar | Guarda el layout en el archivo de usuario de la orientación actual y cierra el editor. |
-| Asignar tecla | Elige letras, números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab o flechas. «Pulsar una tecla física…» abre la captura del teclado o mando; Atrás cancela. |
+| Tecla | Elige letras, números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab o flechas. «Pulsar una tecla física…» abre la captura del teclado o mando; Atrás cancela. |
 | Nombre | Cambia la etiqueta del botón. |
 | Tamaño | Deslizador en el propio panel; muestra el diámetro como porcentaje del lado más corto de la pantalla. |
 | Eliminar | Borra el botón seleccionado. |
 
-Sin selección aparece «Toca un botón para editarlo · arrástralo para moverlo».
-Al seleccionar un botón aparecen su nombre, tecla y acciones; un aro ámbar lo
-resalta sobre el pad. Para la cruceta se muestra solo el tamaño; su movimiento
-sigue disponible arrastrándola. El pad conserva la ocultación automática al
-usar teclado/mando y reaparece al tocar la pantalla.
+Sin selección aparece «Toca un botón para editarlo».
+Al seleccionar un botón aparecen su etiqueta en una ficha y las acciones
+Tecla, Nombre y Eliminar; un aro ámbar lo resalta sobre el pad. La descripción
+accesible de la ficha incluye la tecla asignada. Para la cruceta se muestra
+solo el tamaño; su movimiento sigue disponible arrastrándola. El pad conserva
+la ocultación automática al usar teclado/mando y reaparece al tocar la pantalla.
 
 El contador muestra, por ejemplo, `60 FPS` en una esquina libre, respetando
 insets y recorte de cámara. Busca espacio en los bordes si hay controles y se
@@ -343,15 +358,17 @@ está abierto, se cierra y descarta los cambios sin guardar.
 
 Verificación manual (teléfono, ambas orientaciones):
 
-1. Abrir el editor con Android en español; comprobar recorte de cámara, barras,
-   Guardar/Cancelar y desplazamiento del panel. Probar Mover panel y Plegar.
+1. Abrir el engranaje y después Editar controles con Android en español;
+   comprobar recorte de cámara, barras y todas las filas sin recortes. Probar
+   Restaurar y Plegar/Desplegar; Mover panel solo debe aparecer en horizontal.
+   Con poca altura, comprobar que el scroll permite alcanzar todas las acciones.
 2. Seleccionar y arrastrar botones y cruceta; cambiar tamaño, nombre y tecla
    (lista y teclado/mando), añadir y eliminar un botón.
 3. Cancelar tras editar o Restaurar y reabrir: debe conservarse el diseño
    guardado. Guardar y reabrir: deben conservarse los cambios.
 4. Girar con cambios pendientes: deben descartarse y cargarse los controles
    de la nueva orientación. Comprobar que teclado/mando aún oculta el pad y
-   que tocar la pantalla lo recupera.
+   que tocar la pantalla lo recupera. Repetir con Ocultar controles desde el menú.
 5. Alternar Mostrar FPS desde el engranaje y con F2 físico: comprobar etiqueta,
    casilla y apagado. Girar y mostrar/ocultar controles secundarios; comprobar
    que el contador respeta barras, cámara, engranaje y botones. Repetir en inglés.

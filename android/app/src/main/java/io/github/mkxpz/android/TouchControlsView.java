@@ -1,19 +1,28 @@
 package io.github.mkxpz.android;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.util.SparseArray;
 import android.view.HapticFeedbackConstants;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.libsdl.app.SDLActivity;
@@ -137,6 +146,10 @@ public final class TouchControlsView extends FrameLayout {
     private float gearX;
     private float gearY;
     private float gearR;
+    private View gearAnchor;
+    private PopupWindow quickMenu;
+    private CheckBox fpsToggle;
+    private Runnable toggleFps;
     private TextView fpsLabel;
     private String fpsText;
 
@@ -149,6 +162,13 @@ public final class TouchControlsView extends FrameLayout {
         setFocusableInTouchMode(false);
         setHapticFeedbackEnabled(true);
         paint.setStrokeCap(Paint.Cap.ROUND);
+        gearAnchor = new View(context);
+        gearAnchor.setContentDescription(context.getString(R.string.controls_menu_title));
+        gearAnchor.setFocusable(true);
+        gearAnchor.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF),
+                null, menuBackground(0xFFFFFFFF)));
+        gearAnchor.setOnClickListener(v -> openGear());
+        addView(gearAnchor, new FrameLayout.LayoutParams(1, 1));
         fpsLabel = new TextView(context);
         fpsLabel.setTextSize(12);
         fpsLabel.setTextColor(0xFFF4F4F6);
@@ -161,9 +181,111 @@ public final class TouchControlsView extends FrameLayout {
 
     void setFpsText(String text) {
         fpsText = text;
+        if (fpsToggle != null) fpsToggle.setChecked(text != null);
         fpsLabel.setText(text);
         fpsLabel.setVisibility(text == null ? View.INVISIBLE : View.VISIBLE);
         invalidate();
+    }
+
+    void setFpsToggleListener(Runnable listener) {
+        toggleFps = listener;
+    }
+
+    private void openGear() {
+        if (editing) {
+            if (editListener != null) editListener.onEditModeChanged(true);
+            return;
+        }
+        if (quickMenu != null) return;
+        releaseAllKeys();
+        Rect safe = new Rect();
+        getSafeBounds(safe);
+        safe.inset(dp(8), dp(8));
+        if (safe.width() <= 0 || safe.height() <= 0) return;
+
+        LinearLayout items = new LinearLayout(getContext());
+        items.setOrientation(LinearLayout.VERTICAL);
+        items.setPadding(dp(4), dp(4), dp(4), dp(4));
+        items.addView(menuButton(R.string.controls_editor_title, v -> {
+            dismissQuickMenu();
+            beginEditing();
+        }), new LinearLayout.LayoutParams(-1, -2));
+        fpsToggle = new CheckBox(getContext());
+        fpsToggle.setText(R.string.controls_show_fps);
+        fpsToggle.setTextColor(0xFFF4F4F6);
+        fpsToggle.setTextSize(14);
+        fpsToggle.setMinHeight(dp(48));
+        fpsToggle.setPadding(dp(8), 0, dp(8), 0);
+        fpsToggle.setButtonTintList(new ColorStateList(new int[][]{
+                new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{0xFFFFC850, 0xFFC6CBD5}));
+        fpsToggle.setChecked(fpsText != null);
+        fpsToggle.setOnClickListener(v -> {
+            // The engine's next title, including physical F2 presses, sets the checked state.
+            fpsToggle.setChecked(fpsText != null);
+            if (toggleFps != null) toggleFps.run();
+        });
+        items.addView(fpsToggle, new LinearLayout.LayoutParams(-1, -2));
+        items.addView(menuButton(R.string.controls_hide, v -> setControlsVisible(false)),
+                new LinearLayout.LayoutParams(-1, -2));
+
+        ScrollView content = new ScrollView(getContext());
+        content.addView(items, new ScrollView.LayoutParams(-1, -2));
+        int width = Math.min(dp(232), safe.width());
+        content.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(safe.height(), MeasureSpec.AT_MOST));
+        int height = content.getMeasuredHeight();
+        quickMenu = new PopupWindow(content, width, height, true);
+        quickMenu.setBackgroundDrawable(menuBackground(0xFF191D26));
+        quickMenu.setElevation(dp(6));
+        quickMenu.setOutsideTouchable(true);
+        quickMenu.setOnDismissListener(() -> {
+            quickMenu = null;
+            fpsToggle = null;
+        });
+        int left = Math.max(safe.left, Math.min(Math.round(gearX - gearR), safe.right - width));
+        int top = Math.round(gearY + gearR) + dp(4);
+        if (top + height > safe.bottom) top = Math.round(gearY - gearR) - dp(4) - height;
+        top = Math.max(safe.top, Math.min(top, safe.bottom - height));
+        int[] location = new int[2];
+        gearAnchor.getLocationInWindow(location);
+        int[] origin = new int[2];
+        getLocationInWindow(origin);
+        quickMenu.showAsDropDown(gearAnchor, origin[0] + left - location[0],
+                origin[1] + top - location[1] - gearAnchor.getHeight(), Gravity.LEFT);
+    }
+
+    void dismissQuickMenu() {
+        if (quickMenu != null) quickMenu.dismiss();
+    }
+
+    private Button menuButton(int text, View.OnClickListener listener) {
+        Button button = new Button(getContext());
+        button.setText(text);
+        button.setTextSize(14);
+        button.setAllCaps(false);
+        button.setTextColor(new ColorStateList(new int[][]{
+                new int[]{android.R.attr.state_focused}, new int[]{}},
+                new int[]{0xFFFFC850, 0xFFF4F4F6}));
+        button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        button.setMinHeight(dp(48));
+        button.setMinimumHeight(dp(48));
+        button.setPadding(dp(12), 0, dp(12), 0);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF),
+                menuBackground(0xFF191D26), null));
+        button.setOnClickListener(listener);
+        return button;
+    }
+
+    private GradientDrawable menuBackground(int color) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(color);
+        background.setCornerRadius(dp(12));
+        return background;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void positionFpsLabel() {
@@ -277,6 +399,7 @@ public final class TouchControlsView extends FrameLayout {
 
     @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        dismissQuickMenu();
         WindowInsets result = super.onApplyWindowInsets(insets);
         layout(getWidth(), getHeight());
         notifyEditor();
@@ -309,6 +432,7 @@ public final class TouchControlsView extends FrameLayout {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+        dismissQuickMenu();
         if (w <= 0 || h <= 0) {
             return;
         }
@@ -333,6 +457,21 @@ public final class TouchControlsView extends FrameLayout {
         gearR = Math.max(0.035f * unit, 24f * getResources().getDisplayMetrics().density);
         gearX = safe.left + margin + gearR;
         gearY = safe.top + margin + gearR;
+        if (gearAnchor != null) {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) gearAnchor.getLayoutParams();
+            int diameter = Math.round(gearR * 2);
+            int left = Math.round(gearX - gearR);
+            int top = Math.round(gearY - gearR);
+            if (params.width != diameter || params.height != diameter
+                    || params.leftMargin != left || params.topMargin != top) {
+                params.width = diameter;
+                params.height = diameter;
+                params.gravity = Gravity.TOP | Gravity.LEFT;
+                params.leftMargin = left;
+                params.topMargin = top;
+                gearAnchor.setLayoutParams(params);
+            }
+        }
 
         if (isAbsolute()) {
             /* Every control says where it goes. */
@@ -489,7 +628,7 @@ public final class TouchControlsView extends FrameLayout {
                 setControlsVisible(true);
 
                 if (hitGear(x, y)) {
-                    beginEditing();
+                    openGear();
                     return true;
                 }
 
@@ -808,6 +947,7 @@ public final class TouchControlsView extends FrameLayout {
         /* The view goes away (a rotation, for example): no key may stay
          * pressed in the engine. */
         releaseAllKeys();
+        dismissQuickMenu();
         super.onDetachedFromWindow();
     }
 
@@ -820,8 +960,9 @@ public final class TouchControlsView extends FrameLayout {
      * controls keep the position they have now so that they can be moved.
      */
     public void beginEditing() {
+        dismissQuickMenu();
         releaseAllKeys();
-        controlsVisible = true;
+        setControlsVisible(true);
         float w = getWidth();
         float h = getHeight();
         for (Control control : controls) {
@@ -926,6 +1067,8 @@ public final class TouchControlsView extends FrameLayout {
     public void setControlsVisible(boolean visible) {
         if (controlsVisible != visible) {
             controlsVisible = visible;
+            gearAnchor.setVisibility(visible ? View.VISIBLE : View.GONE);
+            if (!visible) dismissQuickMenu();
             invalidate();
         }
     }
@@ -966,7 +1109,7 @@ public final class TouchControlsView extends FrameLayout {
         drawGear(canvas);
     }
 
-    /** The little gear that opens the editor. */
+    /** The little gear that opens the quick menu, or restores the editor panel. */
     private void drawGear(Canvas canvas) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(editing ? Color.argb(60, 255, 255, 255) : Color.argb(110, 255, 255, 255));
