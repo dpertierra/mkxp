@@ -14,6 +14,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import org.libsdl.app.SDLActivity;
 
@@ -136,6 +137,8 @@ public final class TouchControlsView extends FrameLayout {
     private float gearX;
     private float gearY;
     private float gearR;
+    private TextView fpsLabel;
+    private String fpsText;
 
     public TouchControlsView(Context context, TouchControlsConfig config) {
         super(context);
@@ -146,6 +149,55 @@ public final class TouchControlsView extends FrameLayout {
         setFocusableInTouchMode(false);
         setHapticFeedbackEnabled(true);
         paint.setStrokeCap(Paint.Cap.ROUND);
+        fpsLabel = new TextView(context);
+        fpsLabel.setTextSize(12);
+        fpsLabel.setTextColor(0xFFF4F4F6);
+        fpsLabel.setBackgroundColor(0xE6191D26);
+        int padding = Math.round(4 * getResources().getDisplayMetrics().density);
+        fpsLabel.setPadding(padding * 2, padding, padding * 2, padding);
+        fpsLabel.setVisibility(View.INVISIBLE);
+        addView(fpsLabel, new FrameLayout.LayoutParams(-2, -2));
+    }
+
+    void setFpsText(String text) {
+        fpsText = text;
+        fpsLabel.setText(text);
+        fpsLabel.setVisibility(text == null ? View.INVISIBLE : View.VISIBLE);
+        invalidate();
+    }
+
+    private void positionFpsLabel() {
+        if (fpsLabel == null || fpsText == null) return;
+        Rect safe = new Rect();
+        getSafeBounds(safe);
+        int gap = Math.round(8 * getResources().getDisplayMetrics().density);
+        safe.inset(gap, gap);
+        if (safe.width() <= 0 || safe.height() <= 0) {
+            fpsLabel.setVisibility(View.INVISIBLE);
+            return;
+        }
+        fpsLabel.measure(MeasureSpec.makeMeasureSpec(safe.width(), MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(safe.height(), MeasureSpec.AT_MOST));
+        int width = fpsLabel.getMeasuredWidth();
+        int height = fpsLabel.getMeasuredHeight();
+        Rect gear = new Rect((int) (gearX - gearR), (int) (gearY - gearR),
+                (int) Math.ceil(gearX + gearR), (int) Math.ceil(gearY + gearR));
+        // ponytail: search the edges; hide on crowded layouts until a free-position HUD is needed.
+        for (int row = 0; row <= (safe.height() - height) / (height + gap); row++) {
+            for (int corner = 0; corner < 4; corner++) {
+                int left = corner % 2 == 0 ? safe.right - width : safe.left;
+                int top = corner < 2 ? safe.top + row * (height + gap)
+                        : safe.bottom - height - row * (height + gap);
+                Rect bounds = new Rect(left, top, left + width, top + height);
+                if (controlsVisible && (Rect.intersects(bounds, gear) || editorOverlap(bounds) > 0)) {
+                    continue;
+                }
+                fpsLabel.layout(bounds.left, bounds.top, bounds.right, bounds.bottom);
+                fpsLabel.setVisibility(View.VISIBLE);
+                return;
+            }
+        }
+        fpsLabel.setVisibility(View.INVISIBLE);
     }
 
     /** Replaces the layout of the pad. */
@@ -884,6 +936,7 @@ public final class TouchControlsView extends FrameLayout {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        positionFpsLabel();
         if (!controlsVisible) {
             return;
         }

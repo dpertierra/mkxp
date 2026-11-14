@@ -296,7 +296,7 @@ con la cruceta a la izquierda.
 ### Editor de los controles
 
 El botón de engranaje de la esquina superior izquierda del pad abre el
-editor. Mientras el editor está abierto no se manda ninguna tecla al juego y
+editor. Mientras el editor está abierto el pad no manda teclas al juego y
 las teclas que estaban pulsadas se sueltan.
 
 El panel oscuro respeta las barras de estado/navegación y el recorte de la
@@ -314,6 +314,7 @@ se muestran en español o inglés según el idioma de Android.
 |---|---|
 | Añadir botón | Añade un botón nuevo (con la tecla Intro y la etiqueta `?`) y lo selecciona. |
 | Restaurar | Carga el layout del juego para la orientación actual o el predeterminado. Es provisional hasta pulsar Guardar; Cancelar también descarta la restauración. |
+| Mostrar FPS / Show FPS | Envía F2 al motor para alternar el contador. La casilla refleja los títulos que devuelve el motor; no depende de Guardar/Cancelar. |
 | Cancelar | Descarta los cambios y cierra el editor. |
 | Guardar | Guarda el layout en el archivo de usuario de la orientación actual y cierra el editor. |
 | Asignar tecla | Elige letras, números, F1-F12, Intro, Esc, espacio, Mayús, Ctrl, Alt, Tab o flechas. «Pulsar una tecla física…» abre la captura del teclado o mando; Atrás cancela. |
@@ -326,6 +327,14 @@ Al seleccionar un botón aparecen su nombre, tecla y acciones; un aro ámbar lo
 resalta sobre el pad. Para la cruceta se muestra solo el tamaño; su movimiento
 sigue disponible arrastrándola. El pad conserva la ocultación automática al
 usar teclado/mando y reaparece al tocar la pantalla.
+
+El contador muestra, por ejemplo, `60 FPS` en una esquina libre, respetando
+insets y recorte de cámara. Busca espacio en los bordes si hay controles y se
+oculta si no encuentra sitio. Sigue visible al ocultar el pad con teclado/mando.
+Lee los títulos FPS del motor mediante `onTitleChanged`; un título FPS que no
+pueda interpretar se muestra completo. Al restaurarse el título normal, se
+oculta y desmarca la casilla, también si F2 procede de un teclado físico.
+No guarda esta preferencia entre ejecuciones.
 
 Los botones y la cruceta se mueven arrastrándolos. Las posiciones se guardan
 como fracciones de la pantalla, por separado para vertical y horizontal.
@@ -343,6 +352,9 @@ Verificación manual (teléfono, ambas orientaciones):
 4. Girar con cambios pendientes: deben descartarse y cargarse los controles
    de la nueva orientación. Comprobar que teclado/mando aún oculta el pad y
    que tocar la pantalla lo recupera.
+5. Alternar Mostrar FPS desde el engranaje y con F2 físico: comprobar etiqueta,
+   casilla y apagado. Girar y mostrar/ocultar controles secundarios; comprobar
+   que el contador respeta barras, cámara, engranaje y botones. Repetir en inglés.
 
 ## Configuración
 

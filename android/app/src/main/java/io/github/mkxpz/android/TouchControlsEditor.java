@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -27,6 +28,7 @@ final class TouchControlsEditor {
         void onSave(TouchControlsConfig config);
         void onCancel();
         void onRestoreDefaults();
+        void onToggleFps();
     }
 
     private static final float MIN_SIZE = 0.04f;
@@ -52,6 +54,8 @@ final class TouchControlsEditor {
     private Button keyButton;
     private Button nameButton;
     private Button deleteButton;
+    private CheckBox fpsToggle;
+    private boolean fpsVisible;
     private AlertDialog dialog;
     private boolean waitingForKey;
     private TouchControlsConfig.Spec keyTarget;
@@ -89,6 +93,11 @@ final class TouchControlsEditor {
         if (panel != null) {
             panel.setVisibility(View.GONE);
         }
+    }
+
+    void setFpsVisible(boolean visible) {
+        fpsVisible = visible;
+        if (fpsToggle != null) fpsToggle.setChecked(visible);
     }
 
     /** Consume both halves of a captured key, including repeats, before SDL sees it. */
@@ -184,6 +193,20 @@ final class TouchControlsEditor {
         content.addView(layoutTitle);
         content.addView(pair(button(R.string.controls_editor_add, v -> view.addButton()),
                 button(R.string.controls_editor_restore, v -> showRestoreDialog())));
+        fpsToggle = new CheckBox(activity);
+        fpsToggle.setText(R.string.controls_show_fps);
+        fpsToggle.setTextColor(INK);
+        fpsToggle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        fpsToggle.setButtonTintList(new ColorStateList(new int[][]{
+                new int[]{android.R.attr.state_checked}, new int[]{}}, new int[]{ACCENT, MUTED}));
+        fpsToggle.setMinHeight(dp(48));
+        fpsToggle.setChecked(fpsVisible);
+        fpsToggle.setOnClickListener(v -> {
+            // The engine's next title, including physical F2 presses, sets the checked state.
+            fpsToggle.setChecked(fpsVisible);
+            callback.onToggleFps();
+        });
+        content.addView(fpsToggle);
         body = new ScrollView(activity);
         body.setFillViewport(false);
         body.addView(content);

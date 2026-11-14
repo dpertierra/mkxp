@@ -18,6 +18,7 @@
     <string name="controls_editor_size_value">Size · %1$d%%</string>
     <string name="controls_editor_delete">Delete</string>
     <string name="controls_editor_layout">Layout</string>
+    <string name="controls_show_fps">Show FPS</string>
     <string name="controls_editor_add">Add button</string>
     <string name="controls_editor_restore">Restore</string>
     <string name="controls_editor_cancel">Cancel</string>

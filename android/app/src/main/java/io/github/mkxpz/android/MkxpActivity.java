@@ -17,6 +17,8 @@ import android.widget.RelativeLayout;
 import org.libsdl.app.SDLActivity;
 
 import java.io.File;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Hosts the MKXP-Z engine inside SDL's Android glue.
@@ -30,6 +32,7 @@ public final class MkxpActivity extends SDLActivity {
 
     /** How long a synthetic key is held, so the engine sees it. */
     private static final long KEY_HOLD_MS = 60;
+    private static final Pattern FPS_TITLE = Pattern.compile("(?:^| - )([0-9]+(?:\\.[0-9]+)? FPS)$");
 
     /** How often the state of the on-screen keyboard is checked. */
     private static final long IME_POLL_MS = 100;
@@ -111,6 +114,7 @@ public final class MkxpActivity extends SDLActivity {
             });
             mLayout.addView(touchControls, new RelativeLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            updateFpsTitle(getTitle());
         }
         handler.post(imeWatcher);
     }
@@ -134,7 +138,29 @@ public final class MkxpActivity extends SDLActivity {
             touchControls.setConfig(TouchControlsConfig.loadGameLayout(MkxpActivity.this, gameDir));
             touchControls.beginEditing();
         }
+
+        @Override
+        public void onToggleFps() {
+            SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_F2);
+            handler.postDelayed(() -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_F2),
+                    KEY_HOLD_MS);
+        }
     };
+
+    @Override
+    protected void onTitleChanged(CharSequence title, int color) {
+        super.onTitleChanged(title, color);
+        updateFpsTitle(title);
+    }
+
+    private void updateFpsTitle(CharSequence title) {
+        if (touchControls == null || controlsEditor == null) return;
+        String text = title == null ? "" : title.toString();
+        boolean visible = text.endsWith(" FPS");
+        Matcher match = FPS_TITLE.matcher(text);
+        touchControls.setFpsText(visible ? (match.find() ? match.group(1) : text) : null);
+        controlsEditor.setFpsVisible(visible);
+    }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
