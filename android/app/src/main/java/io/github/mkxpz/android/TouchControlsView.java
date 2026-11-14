@@ -150,6 +150,7 @@ public final class TouchControlsView extends FrameLayout {
     private PopupWindow quickMenu;
     private CheckBox fpsToggle;
     private Runnable toggleFps;
+    private Runnable openGamepad;
     private TextView fpsLabel;
     private String fpsText;
 
@@ -191,6 +192,10 @@ public final class TouchControlsView extends FrameLayout {
         toggleFps = listener;
     }
 
+    void setGamepadListener(Runnable listener) {
+        openGamepad = listener;
+    }
+
     private void openGear() {
         if (editing) {
             if (editListener != null) editListener.onEditModeChanged(true);
@@ -209,6 +214,10 @@ public final class TouchControlsView extends FrameLayout {
         items.addView(menuButton(R.string.controls_editor_title, v -> {
             dismissQuickMenu();
             beginEditing();
+        }), new LinearLayout.LayoutParams(-1, -2));
+        items.addView(menuButton(R.string.gamepad_title, v -> {
+            dismissQuickMenu();
+            if (openGamepad != null) openGamepad.run();
         }), new LinearLayout.LayoutParams(-1, -2));
         fpsToggle = new CheckBox(getContext());
         fpsToggle.setText(R.string.controls_show_fps);

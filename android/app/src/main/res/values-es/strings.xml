@@ -2,6 +2,17 @@
 <resources>
     <string name="controls_menu_title">Controles</string>
     <string name="controls_hide">Ocultar controles</string>
+    <string name="gamepad_title">Mando</string>
+    <string name="gamepad_empty">Sin reasignaciones. El juego usa los controles predeterminados del mando.</string>
+    <string name="gamepad_button_name">Botón %1$s</string>
+    <string name="gamepad_binding">%1$s → %2$s</string>
+    <string name="gamepad_change">Cambiar tecla de %1$s</string>
+    <string name="gamepad_delete">Eliminar reasignación de %1$s</string>
+    <string name="gamepad_capture_button">Pulsa un botón del mando…</string>
+    <string name="gamepad_capture_hint">Pulsa un botón del mando Bluetooth o USB. Los sticks analógicos conservan su comportamiento habitual.</string>
+    <string name="gamepad_choose_key">%1$s: elige una tecla abajo o pulsa Tecla física para usar el teclado.</string>
+    <string name="gamepad_press_key">Pulsa una tecla del teclado. Atrás cancela; usa la lista si el sistema intercepta una tecla.</string>
+    <string name="gamepad_save_error">No se pudo guardar el mapa del mando. Los cambios siguen aquí; vuelve a pulsar Guardar.</string>
     <string name="controls_editor_title">Editar controles</string>
     <string name="controls_editor_move">Mover panel</string>
     <string name="controls_editor_collapse">Plegar</string>

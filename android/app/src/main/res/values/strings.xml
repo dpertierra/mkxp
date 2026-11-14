@@ -7,6 +7,17 @@
     <string name="splash_retry">Retry</string>
     <string name="controls_menu_title">Controls</string>
     <string name="controls_hide">Hide controls</string>
+    <string name="gamepad_title">Gamepad</string>
+    <string name="gamepad_empty">No remaps. The game uses its default controller bindings.</string>
+    <string name="gamepad_button_name">Button %1$s</string>
+    <string name="gamepad_binding">%1$s → %2$s</string>
+    <string name="gamepad_change">Change key for %1$s</string>
+    <string name="gamepad_delete">Delete remap for %1$s</string>
+    <string name="gamepad_capture_button">Press a gamepad button…</string>
+    <string name="gamepad_capture_hint">Press a button on your Bluetooth or USB controller. Analog sticks keep their normal behaviour.</string>
+    <string name="gamepad_choose_key">%1$s: choose a key below or select Physical key to use your keyboard.</string>
+    <string name="gamepad_press_key">Press a key on your keyboard. Back cancels; use the list if the system intercepts a key.</string>
+    <string name="gamepad_save_error">Could not save the gamepad map. Your changes are still here; try Save again.</string>
     <string name="controls_editor_title">Edit controls</string>
     <string name="controls_editor_move">Move panel</string>
     <string name="controls_editor_collapse">Collapse</string>

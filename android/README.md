@@ -296,11 +296,12 @@ con la cruceta a la izquierda.
 ### Editor de los controles
 
 El botón de engranaje de la esquina superior izquierda del pad abre un menú
-oscuro junto al engranaje, con tres opciones:
+oscuro junto al engranaje, con cuatro opciones:
 
 | Opción | Qué hace |
 |---|---|
 | Editar controles | Abre el editor del pad. |
+| Mando / Gamepad | Reasigna botones de mandos Bluetooth o USB a teclas del teclado. |
 | Mostrar FPS / Show FPS | Envía F2 al motor para alternar el contador. La casilla refleja los títulos que devuelve el motor; no depende de Guardar/Cancelar. |
 | Ocultar controles | Oculta el pad hasta el siguiente toque en la pantalla. |
 
@@ -372,6 +373,81 @@ Verificación manual (teléfono, ambas orientaciones):
 5. Alternar Mostrar FPS desde el engranaje y con F2 físico: comprobar etiqueta,
    casilla y apagado. Girar y mostrar/ocultar controles secundarios; comprobar
    que el contador respeta barras, cámara, engranaje y botones. Repetir en inglés.
+
+### Reasignar botones del mando
+
+**Engranaje > Mando** abre un panel con los mismos componentes y estilos del
+editor táctil. Lista las reasignaciones actuales, por ejemplo **Botón A → C**.
+**+ Botón** pide pulsar un botón del mando y después permite elegir su tecla
+en la cuadrícula compartida con el editor. **Tecla física** captura una tecla
+del teclado; **Lista de teclas** vuelve a la cuadrícula. Los botones del mando
+se consumen mientras el panel está abierto, incluida la liberación del botón
+capturado, para que esas pulsaciones no lleguen al juego. La capa también
+bloquea los toques fuera del panel.
+
+Cada fila permite cambiar la tecla o eliminar la reasignación. **Restaurar**
+vacía el mapa y recupera las asignaciones predeterminadas del motor al guardar.
+**Cancelar** descarta los cambios; **Guardar** escribe el archivo y activa el
+mapa. Si falla la escritura, el panel conserva los cambios y permite reintentar.
+Atrás cancela una captura o vuelve a la lista; desde la lista cierra sin guardar.
+Al pausar la app o girar la pantalla se descartan los cambios pendientes.
+
+El archivo es `<filesDir>/gamepad_map.json`, compartido por todos los mandos y
+ambas orientaciones, separado de los layouts táctiles y de los datos del juego:
+
+```json
+{
+  "BUTTON_A": "C",
+  "BUTTON_B": "X",
+  "BUTTON_START": "ENTER",
+  "DPAD_UP": "DPAD_UP"
+}
+```
+
+Las claves son nombres de botones Android sin `KEYCODE_`: `BUTTON_A/B/X/Y`,
+`BUTTON_L1/R1/L2/R2`, `BUTTON_START/SELECT/MODE`, `BUTTON_THUMBL/THUMBR`,
+`BUTTON_1` a `BUTTON_16`, `DPAD_UP/DOWN/LEFT/RIGHT/CENTER`, las diagonales
+`DPAD_UP_LEFT/UP_RIGHT/DOWN_LEFT/DOWN_RIGHT` o `BACK` si lo emite el mando.
+Los valores usan los mismos nombres de teclas que los layouts del
+pad (`C`, `ENTER`, `SHIFT_LEFT`, `DPAD_UP`, etc.). Las entradas desconocidas se
+ignoran con aviso en el log. Sin archivo, o con `{}`, no hay reasignaciones.
+La escritura usa `AtomicFile` para conservar el archivo anterior si falla.
+
+`MkxpActivity.dispatchKeyEvent` intercepta los botones antes del despacho de
+SDL. Comprueba el origen del evento y también
+`SDLControllerManager.isDeviceSDLJoystick`: algunos mandos publican sus
+botones con origen de teclado. Para un botón reasignado envía directamente
+`SDLActivity.onNativeKeyDown/Up` con la tecla de destino y consume el original.
+Así evita la ruta `SDLSurface.onKey > SDLActivity.handleKeyEvent >
+SDLControllerManager.onNativePadDown/Up`, que recibiría el botón del mando.
+Los botones sin reasignar siguen esa ruta habitual; los sticks y los gatillos
+que solo emiten ejes analógicos conservan su comportamiento. No se usa la
+ventana adicional del menú F1 del motor ni se modifica código nativo.
+
+Se ignoran las repeticiones de botones reasignados mientras están pulsados.
+El seguimiento distingue dispositivo y botón, y permite que varios botones
+mantengan una misma tecla hasta soltar el último. Se sueltan las teclas al
+abrir un editor, perder el foco, pausar o desconectar el mando. Las pulsaciones
+reasignadas siguen contando como entrada física para ocultar el pad; un toque
+en pantalla vuelve a mostrarlo.
+
+Verificación manual (Bluetooth y USB, español e inglés):
+
+1. Abrir Mando, añadir A y asignarle C mediante la cuadrícula. Guardar y probar
+   pulsación, repetición y liberación. Confirmar que la captura no acciona el
+   juego y que los botones sin reasignar y ambos sticks siguen funcionando.
+2. Cambiar A mediante Tecla física y asignar otro botón a la misma tecla.
+   Mantener ambos y soltarlos por separado; comprobar que se libera al soltar
+   el último. Probar también L1/R1, Start/Select y cruceta si emiten teclas.
+3. Cancelar cambios y restauraciones; reabrir y comprobar el mapa guardado.
+   Guardar, reiniciar la app y comprobar persistencia. Restaurar y guardar:
+   deben volver las asignaciones predeterminadas.
+4. Mantener un botón y pausar, abrir el panel o desconectar el mando; comprobar
+   que no queda una tecla pulsada. Girar durante la captura: debe cerrarse sin
+   guardar. Comprobar ocultación por entrada física y recuperación al tocar.
+5. Con teclado, recorrer lista y cuadrícula con Tab/Enter y cancelar con
+   Escape/Atrás. Revisar scroll e insets en ambas orientaciones y los logs
+   de la app si falla la carga o el guardado.
 
 ## Configuración
 

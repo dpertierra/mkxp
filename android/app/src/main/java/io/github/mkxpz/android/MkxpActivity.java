@@ -1,6 +1,7 @@
 package io.github.mkxpz.android;
 
 import android.content.res.Configuration;
+import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,7 +27,7 @@ import java.util.regex.Pattern;
  * <p>SDL's Java sources are not vendored in this repository: they are copied
  * from the pinned SDL2 release by {@code fetch-sdl-java.sh}.
  */
-public final class MkxpActivity extends SDLActivity {
+public final class MkxpActivity extends SDLActivity implements InputManager.InputDeviceListener {
 
     private static final String TAG = "MkxpActivity";
 
@@ -59,6 +60,9 @@ public final class MkxpActivity extends SDLActivity {
 
     /** Editor of the on-screen pad. */
     private TouchControlsEditor controlsEditor;
+    private GamepadEditor gamepadEditor;
+    private GamepadMapping gamepadMapping;
+    private InputManager inputManager;
 
     private int controlsOrientation;
 
@@ -106,8 +110,16 @@ public final class MkxpActivity extends SDLActivity {
             touchControls = new TouchControlsView(this, config);
             touchControls.setFpsToggleListener(this::toggleFps);
             controlsEditor = new TouchControlsEditor(this, touchControls, editorCallback);
+            gamepadMapping = new GamepadMapping(this);
+            gamepadEditor = new GamepadEditor(this, touchControls, gamepadMapping, () -> {
+                if (mSurface != null) mSurface.requestFocus();
+            });
+            touchControls.setGamepadListener(gamepadEditor::show);
+            inputManager = (InputManager) getSystemService(INPUT_SERVICE);
+            inputManager.registerInputDeviceListener(this, handler);
             touchControls.setEditListener(editing -> {
                 if (editing) {
+                    gamepadMapping.releaseAll();
                     controlsEditor.show();
                 } else {
                     controlsEditor.hide();
@@ -168,6 +180,7 @@ public final class MkxpActivity extends SDLActivity {
             // ponytail: cancel edits on rotation; preserving them would need per-orientation drafts.
             touchControls.endEditing();
             touchControls.setConfig(TouchControlsConfig.load(this, gameDir));
+            gamepadEditor.hide();
         }
     }
 
@@ -179,6 +192,8 @@ public final class MkxpActivity extends SDLActivity {
             touchControls.releaseAllKeys();
         }
         if (controlsEditor != null) controlsEditor.cancelInteraction();
+        if (gamepadEditor != null) gamepadEditor.hide();
+        if (gamepadMapping != null) gamepadMapping.releaseAll();
         handler.removeCallbacks(imeWatcher);
         super.onPause();
     }
@@ -192,14 +207,18 @@ public final class MkxpActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (controlsEditor != null && controlsEditor.dispatchKeyEvent(event)) {
-            return true;
-        }
-        if (touchControls != null && isPhysicalInput(event.getSource())
-                && !isOnScreenKeyboard(event) && !touchControls.isEditing()) {
+        boolean gamepad = GamepadMapping.isGamepadEvent(event);
+        if (touchControls != null && (gamepad || isPhysicalInput(event.getSource()))
+                && !isOnScreenKeyboard(event) && !touchControls.isEditing()
+                && (gamepadEditor == null || !gamepadEditor.isShowing())) {
             // A keyboard or a pad is in use: the on-screen pad is not needed.
             touchControls.setControlsVisible(false);
         }
+        boolean handled = gamepadEditor != null && gamepadEditor.dispatchKeyEvent(event);
+        if (!handled && controlsEditor != null) handled = controlsEditor.dispatchKeyEvent(event);
+        // Intercept before SDL's surface listener routes joystick buttons to onNativePadDown/Up.
+        if (gamepadMapping != null && gamepadMapping.dispatchKeyEvent(event, handled)) return true;
+        if (handled) return true;
         int keyCode = event.getKeyCode();
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_BACK) {
@@ -218,6 +237,10 @@ public final class MkxpActivity extends SDLActivity {
 
     @Override
     public void onBackPressed() {
+        if (gamepadEditor != null && gamepadEditor.isShowing()) {
+            gamepadEditor.onBackPressed();
+            return;
+        }
         if (touchControls != null && touchControls.isEditing()) {
             controlsEditor.onBackPressed();
             return;
@@ -246,7 +269,8 @@ public final class MkxpActivity extends SDLActivity {
     private void watchIme() {
         boolean shown = SDLActivity.isScreenKeyboardShown();
         if (imeShown && !shown) {
-            if (!imeClosedByKey && (touchControls == null || !touchControls.isEditing())) {
+            if (!imeClosedByKey && (touchControls == null || !touchControls.isEditing())
+                    && (gamepadEditor == null || !gamepadEditor.isShowing())) {
                 pressReturn();
             }
             imeClosedByKey = false;
@@ -267,10 +291,37 @@ public final class MkxpActivity extends SDLActivity {
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
         if (touchControls != null && isPhysicalInput(event.getSource())
-                && !touchControls.isEditing()) {
+                && !touchControls.isEditing()
+                && (gamepadEditor == null || !gamepadEditor.isShowing())) {
             touchControls.setControlsVisible(false);
         }
         return super.onGenericMotionEvent(event);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        if (!hasFocus && gamepadMapping != null) gamepadMapping.releaseAll();
+        super.onWindowFocusChanged(hasFocus);
+    }
+
+    @Override
+    public void onInputDeviceAdded(int deviceId) { }
+
+    @Override
+    public void onInputDeviceChanged(int deviceId) {
+        if (gamepadMapping != null) gamepadMapping.releaseDevice(deviceId);
+    }
+
+    @Override
+    public void onInputDeviceRemoved(int deviceId) {
+        if (gamepadMapping != null) gamepadMapping.releaseDevice(deviceId);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (inputManager != null) inputManager.unregisterInputDeviceListener(this);
+        handler.removeCallbacks(imeWatcher);
+        super.onDestroy();
     }
 
     /** True for keys typed on the on-screen keyboard, which is not a physical device. */
