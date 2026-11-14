@@ -14,6 +14,8 @@
     <string name="controls_editor_size">Tamaño</string>
     <string name="controls_editor_size_value">Tamaño · %1$d%%</string>
     <string name="controls_editor_delete">Eliminar</string>
+    <string name="controls_editor_delete_title">¿Eliminar el botón?</string>
+    <string name="controls_editor_delete_message">¿Quitar «%1$s» de este diseño? Pulsa Guardar para conservar el cambio.</string>
     <string name="controls_show_fps">Mostrar FPS</string>
     <string name="controls_editor_add">+ Botón</string>
     <string name="controls_editor_restore">Restaurar</string>
@@ -21,6 +23,8 @@
     <string name="controls_editor_save">Guardar</string>
     <string name="controls_editor_apply">Aplicar</string>
     <string name="controls_editor_capture_key">Pulsar una tecla física…</string>
+    <string name="controls_editor_key_list">Lista de teclas</string>
+    <string name="controls_editor_physical_key">Tecla física</string>
     <string name="controls_editor_press_key">Pulsa una tecla del teclado o del mando. Atrás cancela; usa la lista si el sistema intercepta una tecla.</string>
     <string name="controls_editor_restore_title">¿Restaurar el diseño?</string>
     <string name="controls_editor_restore_message">Carga el diseño del juego para esta orientación o el pad predeterminado. Pulsa Guardar para conservarlo o Cancelar para descartarlo.</string>

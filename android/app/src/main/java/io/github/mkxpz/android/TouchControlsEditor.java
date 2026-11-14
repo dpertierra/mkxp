@@ -1,18 +1,24 @@
 package io.github.mkxpz.android;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.os.Build;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -33,7 +39,7 @@ final class TouchControlsEditor {
 
     private static final float MIN_SIZE = 0.04f;
     private static final float MAX_SIZE = 0.30f;
-    private static final int KEY_COUNT = 1 + 26 + 10 + 12 + 11;
+    private static final int KEY_COUNT = 26 + 10 + 12 + 11;
     private static final int INK = 0xFFF4F4F6;
     private static final int MUTED = 0xFFC6CBD5;
     private static final int ACCENT = 0xFFFFC850;
@@ -46,6 +52,7 @@ final class TouchControlsEditor {
     private LinearLayout selectionActions;
     private LinearLayout footer;
     private LinearLayout body;
+    private LinearLayout contextActions;
     private TextView hint;
     private TextView selection;
     private TextView sizeLabel;
@@ -55,9 +62,10 @@ final class TouchControlsEditor {
     private Button keyButton;
     private Button nameButton;
     private Button deleteButton;
-    private AlertDialog dialog;
+    private EditText labelInput;
+    private TouchControlsConfig.Spec contextTarget;
+    private int previousSoftInputMode;
     private boolean waitingForKey;
-    private TouchControlsConfig.Spec keyTarget;
     private int capturedKey = KeyEvent.KEYCODE_UNKNOWN;
     private boolean collapsed;
     private int dock;
@@ -68,6 +76,7 @@ final class TouchControlsEditor {
         this.callback = callback;
         view.setEditorListener(this::refresh);
         view.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> positionPanel(true));
+        view.getViewTreeObserver().addOnGlobalLayoutListener(() -> positionPanel(false));
     }
 
     void show() {
@@ -83,35 +92,56 @@ final class TouchControlsEditor {
     }
 
     void hide() {
-        waitingForKey = false;
-        keyTarget = null;
-        if (dialog != null) {
-            dialog.dismiss();
-            dialog = null;
-        }
+        clearInteraction();
         if (panel != null) {
             panel.setVisibility(View.GONE);
         }
     }
 
-    /** Consume both halves of a captured key, including repeats, before SDL sees it. */
-    boolean captureKey(KeyEvent event) {
+    /** Keep editor input in Android views, including both halves of captured keys. */
+    boolean dispatchKeyEvent(KeyEvent event) {
         if (capturedKey != KeyEvent.KEYCODE_UNKNOWN && event.getKeyCode() == capturedKey) {
             if (event.getAction() == KeyEvent.ACTION_UP) {
                 capturedKey = KeyEvent.KEYCODE_UNKNOWN;
             }
             return true;
         }
-        if (!waitingForKey || event.getAction() != KeyEvent.ACTION_DOWN
-                || event.getKeyCode() == KeyEvent.KEYCODE_BACK
-                || event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN) {
-            return false;
+        if (panel == null || panel.getVisibility() != View.VISIBLE) return false;
+        int code = event.getKeyCode();
+        if (code == KeyEvent.KEYCODE_BACK || (!waitingForKey && code == KeyEvent.KEYCODE_ESCAPE)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                capturedKey = code;
+                onBackPressed();
+            }
+            return true;
         }
-        capturedKey = event.getKeyCode();
-        if (keyTarget == view.getSelectedSpec()) {
-            view.setSelectedKey(capturedKey);
+        if (event.getAction() == KeyEvent.ACTION_DOWN && code != KeyEvent.KEYCODE_UNKNOWN) {
+            if (waitingForKey) {
+                capturedKey = code;
+                if (contextTarget == view.getSelectedSpec()) view.setSelectedKey(code);
+                finishInteraction();
+                return true;
+            }
+            if (labelInput != null && labelInput.hasFocus() && (code == KeyEvent.KEYCODE_ENTER
+                    || code == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                capturedKey = code;
+                applyLabel();
+                return true;
+            }
         }
-        dialog.dismiss();
+        if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN) return false;
+        // Dispatch only when focus belongs to the panel; SDL's surface also has a key listener.
+        if (panel.hasFocus()) activity.getWindow().superDispatchKeyEvent(event);
+        return true;
+    }
+
+    void onBackPressed() {
+        if (!cancelInteraction()) callback.onCancel();
+    }
+
+    boolean cancelInteraction() {
+        if (contextActions == null || contextActions.getVisibility() != View.VISIBLE) return false;
+        finishInteraction();
         return true;
     }
 
@@ -133,8 +163,9 @@ final class TouchControlsEditor {
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         header.addView(iconButton(R.drawable.ic_controls_restore, R.string.controls_editor_restore,
-                v -> showRestoreDialog()), new LinearLayout.LayoutParams(dp(44), dp(44)));
+                v -> showRestoreConfirmation()), new LinearLayout.LayoutParams(dp(44), dp(44)));
         foldButton = iconButton(R.drawable.ic_controls_collapse, R.string.controls_editor_collapse, v -> {
+            clearInteraction();
             collapsed = !collapsed;
             refresh();
         });
@@ -166,9 +197,9 @@ final class TouchControlsEditor {
         LinearLayout.LayoutParams chipParams = new LinearLayout.LayoutParams(0, -2, 1);
         chipParams.rightMargin = dp(4);
         actions.addView(selection, chipParams);
-        keyButton = button(R.string.controls_editor_key, v -> showKeyDialog());
-        nameButton = button(R.string.controls_editor_name, v -> showLabelDialog());
-        deleteButton = button(R.string.controls_editor_delete, v -> view.deleteSelected());
+        keyButton = button(R.string.controls_editor_key, v -> showKeyCapture());
+        nameButton = button(R.string.controls_editor_name, v -> showLabelEditor());
+        deleteButton = button(R.string.controls_editor_delete, v -> showDeleteConfirmation());
         deleteButton.setTextColor(0xFFFFB5B0);
         for (Button action : new Button[]{keyButton, nameButton, deleteButton}) {
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
@@ -200,13 +231,12 @@ final class TouchControlsEditor {
         sizeRow.addView(sizeBar, new LinearLayout.LayoutParams(0, -2, 1));
         selectionActions.addView(sizeRow);
         body.addView(selectionActions);
+        contextActions = column();
+        contextActions.setVisibility(View.GONE);
+        body.addView(contextActions);
         content.addView(body);
 
-        Button save = button(R.string.controls_editor_save, v -> callback.onSave(view.getConfig()));
-        save.setTextColor(0xFF191D26);
-        save.setTypeface(null, Typeface.BOLD);
-        save.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55000000),
-                background(ACCENT, dp(10)), null));
+        Button save = primaryButton(R.string.controls_editor_save, v -> callback.onSave(view.getConfig()));
         footer = row();
         footer.setPadding(0, dp(4), 0, 0);
         Button add = button(R.string.controls_editor_add, v -> view.addButton());
@@ -224,8 +254,10 @@ final class TouchControlsEditor {
             return;
         }
         TouchControlsConfig.Spec spec = view.getSelectedSpec();
-        hint.setVisibility(spec == null ? View.VISIBLE : View.GONE);
-        selectionActions.setVisibility(spec == null ? View.GONE : View.VISIBLE);
+        if (contextActions.getVisibility() == View.VISIBLE && contextTarget != spec) clearInteraction();
+        boolean interacting = contextActions.getVisibility() == View.VISIBLE;
+        hint.setVisibility(!interacting && spec == null ? View.VISIBLE : View.GONE);
+        selectionActions.setVisibility(!interacting && spec != null ? View.VISIBLE : View.GONE);
         if (spec != null) {
             boolean dpad = spec == view.getConfig().dpad;
             selection.setText(dpad ? activity.getString(R.string.controls_editor_dpad)
@@ -242,7 +274,7 @@ final class TouchControlsEditor {
                     Math.round(spec.size * 100)));
         }
         body.setVisibility(collapsed ? View.GONE : View.VISIBLE);
-        footer.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+        footer.setVisibility(collapsed || interacting ? View.GONE : View.VISIBLE);
         foldButton.setImageResource(collapsed ? R.drawable.ic_controls_expand : R.drawable.ic_controls_collapse);
         String foldDescription = activity.getString(collapsed ? R.string.controls_editor_expand
                 : R.string.controls_editor_collapse);
@@ -258,6 +290,22 @@ final class TouchControlsEditor {
         }
         Rect safe = new Rect();
         view.getSafeBounds(safe);
+        if (labelInput != null) {
+            // Fullscreen SDL windows do not reliably resize for the IME; constrain only the panel.
+            WindowInsets insets = view.getRootWindowInsets();
+            if (Build.VERSION.SDK_INT >= 30 && insets != null) {
+                int[] location = new int[2];
+                view.getLocationInWindow(location);
+                safe.bottom = Math.min(safe.bottom, view.getRootView().getHeight()
+                        - insets.getInsets(WindowInsets.Type.ime()).bottom - location[1]);
+            } else {
+                Rect visible = new Rect();
+                view.getWindowVisibleDisplayFrame(visible);
+                int[] location = new int[2];
+                view.getLocationOnScreen(location);
+                safe.bottom = Math.min(safe.bottom, visible.bottom - location[1]);
+            }
+        }
         safe.inset(dp(8), dp(8));
         if (safe.width() <= 0 || safe.height() <= 0) {
             return;
@@ -267,7 +315,7 @@ final class TouchControlsEditor {
         moveButton.setVisibility(portrait ? View.GONE : View.VISIBLE);
         if (portrait) dock = 0;
         int available = safe.height();
-        if (portrait) {
+        if (portrait && labelInput == null) {
             int gameTop = Math.round((view.getHeight() - view.getWidth() * 0.75f) / 2f);
             int upperBand = gameTop - safe.top - dp(8);
             if (upperBand >= dp(100)) {
@@ -279,7 +327,7 @@ final class TouchControlsEditor {
                 View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST));
         int height = panel.getMeasuredHeight();
         Rect bounds = panelBounds(safe, width, height, dock);
-        if (avoidControls && !portrait) {
+        if (avoidControls && !portrait && labelInput == null) {
             // ponytail: six anchors cover phone layouts; free dragging can replace them if needed.
             float best = view.editorOverlap(bounds);
             for (int i = 0; i < 6 && best > 0; i++) {
@@ -346,10 +394,26 @@ final class TouchControlsEditor {
         button.setMinHeight(dp(40));
         button.setMinimumHeight(dp(40));
         button.setPadding(dp(8), dp(4), dp(8), dp(4));
+        button.setBackgroundTintList(null);
+        button.setStateListAnimator(null);
         GradientDrawable face = background(0xFF303744, dp(10));
         face.setStroke(dp(1), 0xFF7D8798);
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF), face, null));
         button.setOnClickListener(listener);
+        return button;
+    }
+
+    private Button primaryButton(int resource, View.OnClickListener listener) {
+        Button button = button(resource, listener);
+        button.setTextColor(0xFF191D26);
+        button.setTypeface(null, Typeface.BOLD);
+        GradientDrawable face = background(ACCENT, dp(10));
+        GradientDrawable focused = background(ACCENT, dp(10));
+        focused.setStroke(dp(2), INK);
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_focused}, focused);
+        states.addState(new int[]{}, face);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55000000), states, null));
         return button;
     }
 
@@ -378,66 +442,169 @@ final class TouchControlsEditor {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
-    private void showKeyDialog() {
-        if (view.getSelectedSpec() == null) return;
-        final int[] codes = keyCodes();
-        dialog = new AlertDialog.Builder(activity)
-                .setTitle(R.string.controls_editor_key)
-                .setItems(keyNames(), (d, which) -> {
-                    if (which == 0) {
-                        showKeyCapture();
-                    } else {
-                        view.setSelectedKey(codes[which]);
-                    }
-                })
-                .setNegativeButton(R.string.controls_editor_cancel, null)
-                .show();
+    private void startInteraction(int title) {
+        clearInteraction();
+        collapsed = false;
+        contextTarget = view.getSelectedSpec();
+        contextActions.setVisibility(View.VISIBLE);
+        TextView heading = text(title, 14, INK);
+        heading.setTypeface(null, Typeface.BOLD);
+        heading.setPadding(0, dp(4), 0, dp(4));
+        contextActions.addView(heading);
+        panel.scrollTo(0, 0);
+    }
+
+    private void clearInteraction() {
+        waitingForKey = false;
+        contextTarget = null;
+        if (labelInput != null) {
+            InputMethodManager ime = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            ime.hideSoftInputFromWindow(labelInput.getWindowToken(), 0);
+            labelInput.clearFocus();
+            labelInput = null;
+            activity.getWindow().setSoftInputMode(previousSoftInputMode);
+        }
+        if (contextActions != null) {
+            contextActions.removeAllViews();
+            contextActions.setVisibility(View.GONE);
+        }
+    }
+
+    private void finishInteraction() {
+        clearInteraction();
+        refresh();
+        panel.scrollTo(0, 0);
+    }
+
+    private void addInteractionButtons(int apply, Runnable action) {
+        LinearLayout actions = row();
+        actions.setPadding(0, dp(4), 0, 0);
+        Button cancel = button(R.string.controls_editor_cancel, v -> finishInteraction());
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+        params.rightMargin = dp(4);
+        actions.addView(cancel, params);
+        actions.addView(primaryButton(apply, v -> action.run()), new LinearLayout.LayoutParams(0, -2, 1));
+        contextActions.addView(actions);
     }
 
     private void showKeyCapture() {
-        keyTarget = view.getSelectedSpec();
+        if (view.getSelectedSpec() == null) return;
+        startInteraction(R.string.controls_editor_capture_key);
         waitingForKey = true;
-        dialog = new AlertDialog.Builder(activity)
-                .setTitle(R.string.controls_editor_key)
-                .setMessage(R.string.controls_editor_press_key)
-                .setNegativeButton(R.string.controls_editor_cancel, null)
-                .setOnKeyListener((d, code, event) -> captureKey(event))
-                .show();
-        dialog.setOnDismissListener(d -> {
-            waitingForKey = false;
-            keyTarget = null;
+        contextActions.addView(text(R.string.controls_editor_press_key, 14, MUTED));
+        addInteractionButtons(R.string.controls_editor_key_list, this::showKeyList);
+        refresh();
+    }
+
+    private void showKeyList() {
+        if (view.getSelectedSpec() == null) return;
+        startInteraction(R.string.controls_editor_key);
+        addInteractionButtons(R.string.controls_editor_physical_key, this::showKeyCapture);
+        String[] names = keyNames();
+        int[] codes = keyCodes();
+        int columns = Math.max(1, (panel.getLayoutParams().width - dp(16)) / dp(88));
+        for (int i = 0; i < codes.length; i += columns) {
+            LinearLayout keys = row();
+            for (int j = i; j < Math.min(i + columns, codes.length); j++) {
+                final int code = codes[j];
+                Button key = button(R.string.controls_editor_key, v -> {
+                    if (contextTarget == view.getSelectedSpec()) view.setSelectedKey(code);
+                    finishInteraction();
+                });
+                key.setText(names[j]);
+                key.setTooltipText(names[j]);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+                params.setMargins(dp(2), dp(2), dp(2), dp(2));
+                keys.addView(key, params);
+            }
+            contextActions.addView(keys);
+        }
+        refresh();
+    }
+
+    private void showLabelEditor() {
+        if (view.getSelectedSpec() == null) return;
+        startInteraction(R.string.controls_editor_name);
+        final EditText input = new EditText(activity);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setSingleLine(true);
+        input.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                | EditorInfo.IME_FLAG_NO_FULLSCREEN);
+        input.setText(contextTarget.label);
+        input.setSelectAllOnFocus(true);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        input.setTextColor(INK);
+        input.setHintTextColor(MUTED);
+        input.setHighlightColor(0x66FFC850);
+        input.setMinHeight(dp(40));
+        input.setPadding(dp(10), dp(6), dp(10), dp(6));
+        input.setBackgroundTintList(null);
+        StateListDrawable states = new StateListDrawable();
+        GradientDrawable focused = background(0xFF303744, dp(10));
+        focused.setStroke(dp(2), ACCENT);
+        GradientDrawable normal = background(0xFF303744, dp(10));
+        normal.setStroke(dp(1), 0xFF7D8798);
+        states.addState(new int[]{android.R.attr.state_focused}, focused);
+        states.addState(new int[]{}, normal);
+        input.setBackground(states);
+        if (Build.VERSION.SDK_INT >= 29) {
+            GradientDrawable cursor = background(ACCENT, 0);
+            cursor.setSize(dp(2), dp(20));
+            input.setTextCursorDrawable(cursor);
+        }
+        input.setContentDescription(activity.getString(R.string.controls_editor_name));
+        input.setOnEditorActionListener((v, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_DONE) return false;
+            applyLabel();
+            return true;
+        });
+        labelInput = input;
+        previousSoftInputMode = activity.getWindow().getAttributes().softInputMode;
+        activity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        contextActions.addView(input, new LinearLayout.LayoutParams(-1, -2));
+        addInteractionButtons(R.string.controls_editor_apply, this::applyLabel);
+        refresh();
+        input.requestFocus();
+        input.post(() -> {
+            if (labelInput != input || !input.hasFocus()) return;
+            InputMethodManager ime = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            ime.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
-    private void showLabelDialog() {
-        if (view.getSelectedSpec() == null) return;
-        final EditText input = new EditText(activity);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(view.getSelectedSpec().label);
-        input.setSelectAllOnFocus(true);
-        input.setContentDescription(activity.getString(R.string.controls_editor_name));
-        dialog = new AlertDialog.Builder(activity)
-                .setTitle(R.string.controls_editor_name)
-                .setView(input)
-                .setPositiveButton(R.string.controls_editor_apply, (d, which) ->
-                        view.setSelectedLabel(input.getText().toString()))
-                .setNegativeButton(R.string.controls_editor_cancel, null)
-                .show();
+    private void applyLabel() {
+        if (labelInput != null && contextTarget == view.getSelectedSpec()) {
+            view.setSelectedLabel(labelInput.getText().toString());
+        }
+        finishInteraction();
     }
 
-    private void showRestoreDialog() {
-        dialog = new AlertDialog.Builder(activity)
-                .setTitle(R.string.controls_editor_restore_title)
-                .setMessage(R.string.controls_editor_restore_message)
-                .setPositiveButton(R.string.controls_editor_restore, (d, which) -> callback.onRestoreDefaults())
-                .setNegativeButton(R.string.controls_editor_cancel, null)
-                .show();
+    private void showRestoreConfirmation() {
+        startInteraction(R.string.controls_editor_restore_title);
+        contextActions.addView(text(R.string.controls_editor_restore_message, 14, MUTED));
+        addInteractionButtons(R.string.controls_editor_restore, () -> {
+            finishInteraction();
+            callback.onRestoreDefaults();
+        });
+        refresh();
+    }
+
+    private void showDeleteConfirmation() {
+        if (view.getSelectedSpec() == null) return;
+        startInteraction(R.string.controls_editor_delete_title);
+        TextView message = text(R.string.controls_editor_delete_title, 14, MUTED);
+        message.setText(activity.getString(R.string.controls_editor_delete_message, contextTarget.label));
+        contextActions.addView(message);
+        addInteractionButtons(R.string.controls_editor_delete, () -> {
+            if (contextTarget == view.getSelectedSpec()) view.deleteSelected();
+            finishInteraction();
+        });
+        refresh();
     }
 
     private String[] keyNames() {
         String[] names = new String[KEY_COUNT];
         int i = 0;
-        names[i++] = activity.getString(R.string.controls_editor_capture_key);
         for (char c = 'A'; c <= 'Z'; c++) names[i++] = String.valueOf(c);
         for (char c = '0'; c <= '9'; c++) names[i++] = String.valueOf(c);
         for (int f = 1; f <= 12; f++) names[i++] = "F" + f;
@@ -450,7 +617,6 @@ final class TouchControlsEditor {
     private static int[] keyCodes() {
         int[] codes = new int[KEY_COUNT];
         int i = 0;
-        codes[i++] = 0;
         for (int c = 0; c < 26; c++) codes[i++] = KeyEvent.KEYCODE_A + c;
         for (int c = 0; c < 10; c++) codes[i++] = KeyEvent.KEYCODE_0 + c;
         for (int f = 1; f <= 12; f++) codes[i++] = KeyEvent.KEYCODE_F1 + f - 1;

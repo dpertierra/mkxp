@@ -19,6 +19,8 @@
     <string name="controls_editor_size">Size</string>
     <string name="controls_editor_size_value">Size · %1$d%%</string>
     <string name="controls_editor_delete">Delete</string>
+    <string name="controls_editor_delete_title">Delete button?</string>
+    <string name="controls_editor_delete_message">Remove “%1$s” from this layout? Tap Save to keep the change.</string>
     <string name="controls_show_fps">Show FPS</string>
     <string name="controls_editor_add">+ Button</string>
     <string name="controls_editor_restore">Restore</string>
@@ -26,6 +28,8 @@
     <string name="controls_editor_save">Save</string>
     <string name="controls_editor_apply">Apply</string>
     <string name="controls_editor_capture_key">Press a physical key…</string>
+    <string name="controls_editor_key_list">Key list</string>
+    <string name="controls_editor_physical_key">Physical key</string>
     <string name="controls_editor_press_key">Press a key on your keyboard or controller. Back cancels; use the list if the system intercepts a key.</string>
     <string name="controls_editor_restore_title">Restore layout?</string>
     <string name="controls_editor_restore_message">Load the game’s layout for this orientation, or the default pad. Tap Save to keep it, or Cancel to discard it.</string>

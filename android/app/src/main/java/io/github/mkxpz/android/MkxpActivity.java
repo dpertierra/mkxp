@@ -178,6 +178,7 @@ public final class MkxpActivity extends SDLActivity {
             touchControls.dismissQuickMenu();
             touchControls.releaseAllKeys();
         }
+        if (controlsEditor != null) controlsEditor.cancelInteraction();
         handler.removeCallbacks(imeWatcher);
         super.onPause();
     }
@@ -191,8 +192,7 @@ public final class MkxpActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (controlsEditor != null && controlsEditor.captureKey(event)) {
-            /* The editor was waiting for a key to assign to a button. */
+        if (controlsEditor != null && controlsEditor.dispatchKeyEvent(event)) {
             return true;
         }
         if (touchControls != null && isPhysicalInput(event.getSource())
@@ -214,6 +214,15 @@ public final class MkxpActivity extends SDLActivity {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (touchControls != null && touchControls.isEditing()) {
+            controlsEditor.onBackPressed();
+            return;
+        }
+        super.onBackPressed();
     }
 
     /**

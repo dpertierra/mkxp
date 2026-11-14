@@ -216,6 +216,8 @@ public final class TouchControlsView extends FrameLayout {
         fpsToggle.setTextSize(14);
         fpsToggle.setMinHeight(dp(48));
         fpsToggle.setPadding(dp(8), 0, dp(8), 0);
+        fpsToggle.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF),
+                menuBackground(0xF5191D26), null));
         fpsToggle.setButtonTintList(new ColorStateList(new int[][]{
                 new int[]{android.R.attr.state_checked}, new int[]{}},
                 new int[]{0xFFFFC850, 0xFFC6CBD5}));
@@ -236,7 +238,7 @@ public final class TouchControlsView extends FrameLayout {
                 MeasureSpec.makeMeasureSpec(safe.height(), MeasureSpec.AT_MOST));
         int height = content.getMeasuredHeight();
         quickMenu = new PopupWindow(content, width, height, true);
-        quickMenu.setBackgroundDrawable(menuBackground(0xFF191D26));
+        quickMenu.setBackgroundDrawable(menuBackground(0xF5191D26));
         quickMenu.setElevation(dp(6));
         quickMenu.setOutsideTouchable(true);
         quickMenu.setOnDismissListener(() -> {
@@ -271,8 +273,12 @@ public final class TouchControlsView extends FrameLayout {
         button.setMinHeight(dp(48));
         button.setMinimumHeight(dp(48));
         button.setPadding(dp(12), 0, dp(12), 0);
+        button.setBackgroundTintList(null);
+        button.setStateListAnimator(null);
+        GradientDrawable face = menuBackground(0xFF303744);
+        face.setStroke(dp(1), 0xFF7D8798);
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x55FFFFFF),
-                menuBackground(0xFF191D26), null));
+                face, null));
         button.setOnClickListener(listener);
         return button;
     }
