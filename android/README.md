@@ -696,6 +696,25 @@ Verificación manual (Bluetooth y USB, español e inglés):
 
 ## Configuración
 
+### Escaneos de terreno de MakerStudio y Visual25D
+
+`binding/android-map-scans.rb` se carga antes de los scripts del juego. Cuando
+detecta `Game_Map#ms_each_region_event_tile` y los escaneos privados de
+`Visual25D::WallField` / `Visual25D::InteriorWallField`, prepara una lista de
+eventos con región de tileset al empezar cada escaneo. MakerStudio consulta esa
+lista en lugar de comprobar la hitbox de todos los eventos por cada casilla.
+Conserva el orden de eventos, las hitboxes originales y los datos de terreno.
+
+La lista solo vive durante el escaneo síncrono y se restaura incluso ante una
+excepción; fuera de él sigue la implementación original. No persiste entre
+fotogramas ni modifica scripts, mapas o partidas del juego. No cambia los flags
+de MRI ni requiere JIT. El hook de definición de clases se desactiva tras
+instalar los tres parches; en juegos sin esas APIs no aplica el parche.
+
+Verificación manual: entrar y salir de Templo Batalla sin guardar; comprobar
+paredes, sombras y colisiones en Isla Desafío, incluidos eventos móviles y
+gráficos de región si el mapa los utiliza. Revisar `mkxp.log` / logcat si falla.
+
 | Qué | Cómo | Por defecto |
 |---|---|---|
 | `applicationId` | `-Pmkxpz.applicationId=com.example.mygame` o `MKXPZ_APPLICATION_ID=...` | `io.github.mkxpz.android` |
