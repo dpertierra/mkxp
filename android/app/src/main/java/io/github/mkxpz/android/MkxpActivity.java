@@ -110,6 +110,7 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
             TouchControlsConfig config = TouchControlsConfig.load(this, gameDir);
             touchControls = new TouchControlsView(this, config);
             touchControls.setFpsToggleListener(this::toggleFps);
+            touchControls.setResetListener(this::resetGame);
             controlsEditor = new TouchControlsEditor(this, touchControls, editorCallback);
             gamepadMapping = new GamepadMapping(this);
             gamepadEditor = new GamepadEditor(this, touchControls, gamepadMapping, () -> {
@@ -157,6 +158,12 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
     private void toggleFps() {
         SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_F2);
         handler.postDelayed(() -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_F2), KEY_HOLD_MS);
+    }
+
+    /** F12 is the engine's soft reset back to the title screen. */
+    private void resetGame() {
+        SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_F12);
+        handler.postDelayed(() -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_F12), KEY_HOLD_MS);
     }
 
     @Override

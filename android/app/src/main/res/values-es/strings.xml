@@ -2,6 +2,8 @@
 <resources>
     <string name="controls_menu_title">Controles</string>
     <string name="controls_hide">Ocultar controles</string>
+    <string name="controls_reset">Reiniciar juego</string>
+    <string name="controls_reset_confirm">Toca otra vez para reiniciar (se pierde lo no guardado)</string>
     <string name="gamepad_title">Mando</string>
     <string name="gamepad_hint">Pulsa un botón del mando para resaltarlo. Toca una casilla para cambiar su tecla.</string>
     <string name="gamepad_section_buttons">Botones</string>

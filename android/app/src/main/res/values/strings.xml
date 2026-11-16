@@ -6,6 +6,8 @@
     <string name="splash_retry">Retry</string>
     <string name="controls_menu_title">Controls</string>
     <string name="controls_hide">Hide controls</string>
+    <string name="controls_reset">Restart game</string>
+    <string name="controls_reset_confirm">Tap again to restart (unsaved progress is lost)</string>
     <string name="gamepad_title">Gamepad</string>
     <string name="gamepad_hint">Press a gamepad button to highlight it. Tap a tile to change its key.</string>
     <string name="gamepad_section_buttons">Buttons</string>

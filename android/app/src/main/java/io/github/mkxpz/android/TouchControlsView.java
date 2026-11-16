@@ -150,6 +150,7 @@ public final class TouchControlsView extends FrameLayout {
     private PopupWindow quickMenu;
     private CheckBox fpsToggle;
     private Runnable toggleFps;
+    private Runnable resetGame;
     private Runnable openGamepad;
     private TextView fpsLabel;
     private String fpsText;
@@ -190,6 +191,10 @@ public final class TouchControlsView extends FrameLayout {
 
     void setFpsToggleListener(Runnable listener) {
         toggleFps = listener;
+    }
+
+    void setResetListener(Runnable listener) {
+        resetGame = listener;
     }
 
     void setGamepadListener(Runnable listener) {
@@ -238,6 +243,18 @@ public final class TouchControlsView extends FrameLayout {
             if (toggleFps != null) toggleFps.run();
         });
         items.addView(fpsToggle, new LinearLayout.LayoutParams(-1, -2));
+        // Unsaved progress is lost, so the first tap only asks for a second one.
+        Button reset = menuButton(R.string.controls_reset, null);
+        reset.setOnClickListener(v -> {
+            if (reset.getTag() == null) {
+                reset.setTag(Boolean.TRUE);
+                reset.setText(R.string.controls_reset_confirm);
+                return;
+            }
+            dismissQuickMenu();
+            if (resetGame != null) resetGame.run();
+        });
+        items.addView(reset, new LinearLayout.LayoutParams(-1, -2));
         items.addView(menuButton(R.string.controls_hide, v -> setControlsVisible(false)),
                 new LinearLayout.LayoutParams(-1, -2));
         for (int i = 0; i < items.getChildCount() - 1; i++) {
