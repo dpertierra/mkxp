@@ -1,4 +1,5 @@
-# Build manual de los tres ejecutables que distribuye La Base de Sky.
+# Build manual de los ejecutables que distribuye La Base de Sky y del APK base
+# de Android.
 #
 # A diferencia de autobuild.yml, que solo dispara en las ramas 'dev' y
 # 'autobuild', esta se lanza a mano desde cualquier rama:
@@ -22,6 +23,10 @@ on:
         default: true
       macos:
         description: 'Construir macOS (Z-universal.app.zip)'
+        type: boolean
+        default: true
+      android:
+        description: 'Construir Android (APK base para crear_release.rb)'
         type: boolean
         default: true
 
@@ -213,3 +218,8 @@ jobs:
         with:
           name: mkxp-z.macos.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/Build/Products/Release/Z-universal.app.zip
+
+  build-android-base:
+    name: Android
+    if: ${{ inputs.android }}
+    uses: ./.github/workflows/build-android-base.yml

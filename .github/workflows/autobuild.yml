@@ -468,3 +468,7 @@ jobs:
         with:
           name: mkxp-z.macos.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
           path: build/Build/Products/Release/Z-universal.app.zip
+
+  build-android-base:
+    name: Android
+    uses: ./.github/workflows/build-android-base.yml
