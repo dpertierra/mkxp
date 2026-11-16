@@ -83,7 +83,9 @@ public final class SplashActivity extends Activity {
     }
 
     private void launchGame() {
-        startActivity(new Intent(this, MkxpActivity.class));
+        Intent game = new Intent(this, MkxpActivity.class);
+        LauncherSession.forward(getIntent(), game);
+        startActivity(game);
         finish();
     }
 

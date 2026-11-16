@@ -27,6 +27,15 @@ val apkOnlyDirs = (if (baseApk) "Graphics,Audio" else providers.gradleProperty("
 require(apkOnlyDirs.all { name ->
     name != "." && name != ".." && name.none { it == '/' || it == '\\' || it.isISOControl() }
 }) { "mkxpz.apkOnlyDirs must be a comma-separated list of top-level game directories" }
+// Signing certificates (SHA-256, uppercase hex, comma separated) the save provider
+// trusts for the Fangame Launcher. See "Proveedor de guardados" in README.md.
+val launcherCerts = providers.gradleProperty("mkxpz.launcherCertSha256").getOrElse("")
+    .split(',').map { it.trim().replace(":", "").uppercase() }.filter(String::isNotEmpty).distinct()
+require(launcherCerts.all { Regex("[0-9A-F]{64}").matches(it) }) {
+    "mkxpz.launcherCertSha256 must be comma-separated SHA-256 digests (64 hex digits each)"
+}
+// Debug escape hatch: lets `adb shell content` (shell uid) call the save provider. Never in the base APK.
+val allowShellCaller = !baseApk && providers.gradleProperty("mkxpz.allowShellCaller").getOrElse("false").toBoolean()
 val filteredAssets = layout.buildDirectory.dir("generated/gameBaseAssets")
 val iconResources = layout.buildDirectory.dir("generated/gameIconRes")
 
@@ -83,6 +92,8 @@ android {
         versionName = appVersionName
         val escapedDirs = apkOnlyDirs.joinToString(",").replace("\"", "\\\"")
         buildConfigField("String", "APK_ONLY_DIRS", "\"$escapedDirs\"")
+        buildConfigField("String", "LAUNCHER_CERT_SHA256", "\"${launcherCerts.joinToString(",")}\"")
+        buildConfigField("boolean", "ALLOW_SHELL_CALLER", allowShellCaller.toString())
         val escapedName = appName.replace("\\", "\\\\").replace("'", "\\'")
             .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
         resValue("string", "app_name", "\"$escapedName\"")

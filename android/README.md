@@ -421,6 +421,35 @@ Verificación manual en dispositivo:
 4. Repetir con `-Pmkxpz.apkOnlyDirs=` y después volver al valor por defecto,
    sin cambiar los archivos de juego, para comprobar la migración por política.
 
+## Proveedor de guardados y sesiones del Fangame Launcher
+
+Todos los APK de juego (por Gradle o reempaquetados desde el APK base) llevan
+el mismo `LauncherSaveProvider` (authority `<applicationId>.fangamelauncher`) y
+reenvían a `MkxpActivity` los extras `com.fangamelauncher.extra.GAME_ID` y
+`SESSION_ID`, con los que avisan al launcher (`game_started` / `game_closed`).
+El contrato completo y cómo quedó implementado está en
+[`docs/launcher-contract.md`](docs/launcher-contract.md).
+
+- Solo `com.fangamelauncher.app` puede usar el proveedor, y solo si el SHA-256
+  de su certificado está en `mkxpz.launcherCertSha256` (hex en mayúsculas, sin
+  `:`, varios separados por comas). El valor por defecto de `gradle.properties`
+  es el certificado de release del launcher. Para un launcher compilado en
+  debug añade su certificado:
+  `-Pmkxpz.launcherCertSha256=<release>,<debug>`
+  (`apksigner verify --print-certs launcher.apk`). La lista va dentro del dex:
+  cambiarla exige regenerar el APK base.
+- `-Pmkxpz.allowShellCaller=true` (solo para probar con `adb shell content`;
+  desactivado por defecto y siempre desactivado en el APK base) acepta además
+  al usuario `shell`/`root` y añade `debugLauncherAllowed` a `info`:
+
+```bash
+U=content://io.github.autor.mijuego.fangamelauncher
+adb shell content call --uri $U --method info
+adb exec-out content read --uri $U/saves.zip > saves.zip
+adb shell "content write --uri $U/import.zip" < saves.zip
+adb shell content call --uri $U --method commit_import   # {accepted=false, error=game_running} si el juego está abierto
+```
+
 ## Controles táctiles
 
 `MkxpActivity` añade una capa de controles táctiles (`TouchControlsView`)

@@ -25,6 +25,11 @@
     <!-- Controller rumble (SDL_GameControllerRumble). -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Lets the save provider check the launcher's signature (package visibility). -->
+    <queries>
+        <package android:name="com.fangamelauncher.app" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:appCategory="game"
@@ -59,6 +64,12 @@
             android:launchMode="singleTask"
             android:preferMinimalPostProcessing="true"
             android:screenOrientation="sensorLandscape" />
+
+        <!-- Save access for the Fangame Launcher; every call is checked in code. -->
+        <provider
+            android:name=".LauncherSaveProvider"
+            android:authorities="${applicationId}.fangamelauncher"
+            android:exported="true" />
     </application>
 
 </manifest>

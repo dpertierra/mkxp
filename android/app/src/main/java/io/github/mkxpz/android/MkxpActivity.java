@@ -1,5 +1,6 @@
 package io.github.mkxpz.android;
 
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
@@ -53,7 +54,20 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
      */
     private static final String ENV_SDL_HIDE_IME = "SDL_RETURN_KEY_HIDES_IME";
 
+    /** Live instances; the save provider refuses imports while one exists. */
+    private static volatile int instances;
+
+    /** True while a game activity exists (contract field {@code gameRunning}). */
+    static boolean isRunning() {
+        return instances > 0;
+    }
+
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    /** Launcher play session, or null when started without the launcher extras. */
+    private LauncherSession session;
+    /** True once game_started was sent for {@link #session}. */
+    private boolean sessionStarted;
 
     /** On-screen pad drawn over the SDL surface. */
     private TouchControlsView touchControls;
@@ -85,6 +99,8 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        instances++;
+        session = LauncherSession.from(getIntent());
         // The engine pauses its render loop when the display goes to sleep.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -275,6 +291,7 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
      * key is sent when the keyboard closes.
      */
     private void watchIme() {
+        watchSession();
         boolean shown = SDLActivity.isScreenKeyboardShown();
         if (imeShown && !shown) {
             if (!imeClosedByKey && (touchControls == null || !touchControls.isEditing())
@@ -287,6 +304,30 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
             }
         }
         imeShown = shown;
+    }
+
+    /** Reports game_started to the launcher once SDL has started the engine thread. */
+    private void watchSession() {
+        if (session != null && !sessionStarted && mSDLThread != null) {
+            sessionStarted = true;
+            session.send(this, LauncherSession.GAME_STARTED, false);
+        }
+    }
+
+    /** A new launcher session for a game that is already running (singleTask). */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        LauncherSession next = LauncherSession.from(intent);
+        if (next == null || next.sameAs(session)) return;
+        closeSession();
+        session = next;
+    }
+
+    private void closeSession() {
+        if (session != null && sessionStarted) session.send(this, LauncherSession.GAME_CLOSED, true);
+        sessionStarted = false;
     }
 
     /** Sends the return key to the engine, the way a game expects it. */
@@ -329,7 +370,13 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
     protected void onDestroy() {
         if (inputManager != null) inputManager.unregisterInputDeviceListener(this);
         handler.removeCallbacks(imeWatcher);
-        super.onDestroy();
+        try {
+            // Joins the engine thread: saves are complete when this returns.
+            super.onDestroy();
+        } finally {
+            instances--;
+        }
+        closeSession();
     }
 
     /** True for keys typed on the on-screen keyboard, which is not a physical device. */
