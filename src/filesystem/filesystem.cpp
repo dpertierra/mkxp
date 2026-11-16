@@ -390,10 +390,12 @@ bool FileSystem::hasApk() const {
 std::string FileSystem::apkLookup(const char *path) {
   std::string normalized = normalize(path, false, false);
   if (normalized == ".") normalized.clear();
+  if (PHYSFS_exists(normalized.c_str())) return normalized;
   std::string cached = desensitize(normalized.c_str());
+  if (p->havePathCache) return cached;
   if (PHYSFS_exists(cached.c_str())) return cached;
 
-  // Directories aren't in pathCache; resolve components even with the cache off.
+  // With the cache disabled, resolve case-insensitive components by enumeration.
   std::string resolved;
   size_t start = 0;
   while (start < normalized.size()) {
@@ -498,6 +500,9 @@ static PHYSFS_EnumerateCallbackResult cacheEnumCB(void *d, const char *origdir,
   PHYSFS_stat(fullPath, &stat);
 
   if (stat.filetype == PHYSFS_FILETYPE_DIRECTORY) {
+#ifdef __ANDROID__
+    data.p->pathCache.insert(lowerCase, mixedCase);
+#endif
     /* Create a new list for this directory */
     std::vector<std::string> &list = data.p->fileLists[lowerCase];
 
