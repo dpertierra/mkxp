@@ -39,6 +39,72 @@ android/
 
 ## Build
 
+### APK base para makers: empaquetar con Ruby, sin SDK
+
+El mantenedor del motor prepara una plantilla una vez, con las bibliotecas
+nativas y el Java de SDL2 ya disponibles:
+
+```bash
+./android/build-base-apk.sh
+```
+
+Produce `android/build-games/mkxpz-android-base.apk` (release sin firma), sin
+`assets/game/` ni `assets/game.version`, aunque existan datos en los assets
+locales. Equivale a `cd android && ./gradlew assembleRelease -Pmkxpz.baseApk=true`;
+el script copia el resultado al nombre estable. La compilación de la plantilla
+sí necesita las herramientas indicadas arriba. El maker solo necesita Ruby con
+sus bibliotecas estándar, incluido OpenSSL.
+
+Para La Base de Sky:
+
+1. Copiar el APK base a la raíz del juego con el nombre `mkxpz-android.apk`,
+   junto a `Game.ini` y `Z-universal.app.zip`.
+2. Ejecutar `ruby tools/crear_release.rb` desde el repositorio de la base y
+   responder **s** a «¿Generar también el APK de Android? (s/N)».
+3. Elegir un applicationId propio y, opcionalmente, un PNG cuadrado. La salida
+   es `_RELEASES/<nombre>_Android.apk`; conservar `tools/android.json` y hacer
+   copia privada de `tools/keys/android.pem` para las actualizaciones.
+
+El empaquetador `tools/android_apk.rb` de la base también acepta directamente
+una carpeta de release preparada, sin ejecutar Gradle, Java, SDK ni NDK. Ver
+`tools/ANDROID.md` en ese repositorio para la API y los límites. No distribuyas
+la clave privada junto al juego. Perderla impide actualizar sus instalaciones.
+
+Contrato de la plantilla para el repackager:
+
+- Paquete manifest `io.github.mkxpz.base`; las clases Java conservan el namespace
+  `io.github.mkxpz.android` y nombres completos en el manifest compilado. El
+  string pool AXML puede cambiar de longitud. Al sustituir el paquete hay que
+  reescribir **todos** los strings derivados, incluidas declaraciones y usos
+  de `<paquete>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` si se añaden dependencias.
+- Etiqueta literal `__MKXPZ_APP_LABEL__`, versión literal
+  `__MKXPZ_VERSION_NAME__` y `versionCode` entero. No hay que editar
+  `resources.arsc` para cambiar la identidad.
+- El launcher referencia `res/mipmap/mkxpz_game_icon.png` y
+  `res/mipmap-xxxhdpi-v4/mkxpz_game_icon.png`. `base-icon.png` es la versión
+  raster del icono existente. Las optimizaciones de rutas de recursos están
+  desactivadas para mantener esos nombres. Se pueden reemplazar ambos PNG por
+  una misma imagen cuadrada (192×192 recomendado); Android la escala.
+- `minSdk=26`, `arm64-v8a`, `extractNativeLibs=false`. Las `.so` deben seguir
+  **STORED y alineadas a 16384 bytes**; los demás archivos STORED, a 4 bytes.
+  La firma v2 se inserta después de las entradas locales sin moverlas. No
+  comprimir las bibliotecas ni cambiar su alineación al reconstruir el ZIP.
+- Añadir `assets/game/` y el SHA-256 `assets/game.version` mantiene el mismo
+  instalador y montaje PhysFS de los APK por juego. Graphics/Audio quedan
+  STORED; los demás datos pueden ir deflated porque el instalador los extrae.
+  Sin datos, la plantilla muestra el error de instalación existente y permite
+  reintentar; no arranca el motor sobre una carpeta vacía.
+- La firma anterior se descarta. El empaquetador firma con APK Signature Scheme
+  v2 usando una clave RSA persistente; no necesita v1 en Android 8+.
+
+Verificación del mantenedor (estas herramientas no son requisito del maker):
+
+```bash
+"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose juego.apk
+"$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging juego.apk
+"$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 juego.apk
+```
+
 ### Un APK por juego (sin recompilar bibliotecas nativas)
 
 Con las bibliotecas ya presentes en `app/src/main/jniLibs/` y el Java de SDL2
@@ -58,7 +124,8 @@ No se compila código nativo ni se instala nada en el teléfono.
 
 El script sincroniza una copia en `android/build-games/<applicationId>/game/`.
 Excluye archivos y carpetas ocultos, ejecutables y accesos directos de escritorio,
-ZIP, `lib64/`, `Game_Linux`, `graphify-out/`, `poke_updater/`, `MapExporter/`,
+ZIP/APK, `_RELEASES/`, `lib64/`, `Game_Linux`, `graphify-out/`, `poke_updater/`,
+`MapExporter/`,
 `AGENTS.md`, `CLAUDE.md`, `skills-lock.json` y `*.makerstudio`.
 Materializa los enlaces simbólicos y borra de la copia los archivos retirados
 del origen. No modifica la carpeta original. `game.version` es un SHA-256 de

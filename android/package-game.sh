@@ -37,6 +37,7 @@ rsync -rtL --delete --delete-excluded \
     --exclude='*.[eE][xX][eE]' --exclude='*.[dD][lL][lL]' \
     --exclude='*.[lL][nN][kK]' --exclude='*.[uU][rR][lL]' \
     --exclude='*.[dD][eE][sS][kK][tT][oO][pP]' --exclude='*.[zZ][iI][pP]' \
+    --exclude='*.[aA][pP][kK]' --exclude='/_RELEASES/' \
     --exclude='lib64/' --exclude='Game_Linux' --exclude='graphify-out/' \
     --exclude='poke_updater/' --exclude='MapExporter/' \
     --exclude='AGENTS.md' --exclude='CLAUDE.md' --exclude='skills-lock.json' \

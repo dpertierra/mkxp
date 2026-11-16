@@ -10,18 +10,19 @@ plugins {
 // Defaults live in gradle.properties and can be overridden per build:
 //   ./gradlew assembleDebug -Pmkxpz.applicationId=com.example.mygame
 //   MKXPZ_APPLICATION_ID=com.example.mygame ./gradlew assembleDebug
-val appId: String = providers.gradleProperty("mkxpz.applicationId")
+val baseApk = providers.gradleProperty("mkxpz.baseApk").getOrElse("false").toBoolean()
+val appId: String = if (baseApk) "io.github.mkxpz.base" else providers.gradleProperty("mkxpz.applicationId")
     .orElse(providers.environmentVariable("MKXPZ_APPLICATION_ID"))
     .get()
 val appVersionCode: Int = providers.gradleProperty("mkxpz.versionCode")
     .map(String::toInt)
     .getOrElse(1)
-val appVersionName: String = providers.gradleProperty("mkxpz.versionName")
+val appVersionName: String = if (baseApk) "__MKXPZ_VERSION_NAME__" else providers.gradleProperty("mkxpz.versionName")
     .getOrElse("1.0.0")
 val appName = providers.gradleProperty("mkxpz.appName").getOrElse("MKXP-Z")
-val gameAssets = providers.gradleProperty("mkxpz.gameAssets").orNull?.let { file(it) }
-val gameIcon = providers.gradleProperty("mkxpz.icon").orNull?.let { file(it) }
-val apkOnlyDirs = providers.gradleProperty("mkxpz.apkOnlyDirs").getOrElse("Graphics,Audio")
+val gameAssets = if (baseApk) null else providers.gradleProperty("mkxpz.gameAssets").orNull?.let { file(it) }
+val gameIcon = if (baseApk) rootProject.file("base-icon.png") else providers.gradleProperty("mkxpz.icon").orNull?.let { file(it) }
+val apkOnlyDirs = (if (baseApk) "Graphics,Audio" else providers.gradleProperty("mkxpz.apkOnlyDirs").getOrElse("Graphics,Audio"))
     .split(',').map(String::trim).filter(String::isNotEmpty).distinct()
 require(apkOnlyDirs.all { name ->
     name != "." && name != ".." && name.none { it == '/' || it == '\\' || it.isISOControl() }
@@ -29,8 +30,8 @@ require(apkOnlyDirs.all { name ->
 val filteredAssets = layout.buildDirectory.dir("generated/gameBaseAssets")
 val iconResources = layout.buildDirectory.dir("generated/gameIconRes")
 
-val filterGameAssets = if (gameAssets != null) {
-    require(gameAssets.resolve("game").isDirectory && gameAssets.resolve("game.version").isFile) {
+val filterGameAssets = if (baseApk || gameAssets != null) {
+    if (gameAssets != null) require(gameAssets.resolve("game").isDirectory && gameAssets.resolve("game.version").isFile) {
         "mkxpz.gameAssets must contain game/ and game.version: $gameAssets"
     }
     tasks.register<Sync>("filterGameAssets") {
@@ -85,6 +86,7 @@ android {
         val escapedName = appName.replace("\\", "\\\\").replace("'", "\\'")
             .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
         resValue("string", "app_name", "\"$escapedName\"")
+        manifestPlaceholders["appLabel"] = if (baseApk) "__MKXPZ_APP_LABEL__" else "@string/app_name"
         manifestPlaceholders["launcherIcon"] = if (gameIcon == null) {
             "@mipmap/ic_launcher"
         } else "@mipmap/mkxpz_game_icon"
@@ -118,7 +120,8 @@ android {
     }
 
     sourceSets.getByName("main") {
-        if (gameAssets != null) assets.setSrcDirs(listOf(filteredAssets, gameAssets))
+        if (baseApk) assets.setSrcDirs(listOf(filteredAssets))
+        else if (gameAssets != null) assets.setSrcDirs(listOf(filteredAssets, gameAssets))
         if (gameIcon != null) res.srcDir(iconResources)
     }
 
