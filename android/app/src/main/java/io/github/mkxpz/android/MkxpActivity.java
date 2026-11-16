@@ -66,8 +66,6 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
 
     /** Launcher play session, or null when started without the launcher extras. */
     private LauncherSession session;
-    /** True once game_started was sent for {@link #session}. */
-    private boolean sessionStarted;
 
     /** On-screen pad drawn over the SDL surface. */
     private TouchControlsView touchControls;
@@ -101,6 +99,7 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
     protected void onCreate(Bundle savedInstanceState) {
         instances++;
         session = LauncherSession.from(getIntent());
+        if (session != null) LauncherSession.setActive(session);
         // The engine pauses its render loop when the display goes to sleep.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -308,9 +307,8 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
 
     /** Reports game_started to the launcher once SDL has started the engine thread. */
     private void watchSession() {
-        if (session != null && !sessionStarted && mSDLThread != null) {
-            sessionStarted = true;
-            session.send(this, LauncherSession.GAME_STARTED, false);
+        if (session != null && mSDLThread != null) {
+            session.reportStarted(this);
         }
     }
 
@@ -319,15 +317,29 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        LauncherSession next = LauncherSession.from(intent);
-        if (next == null || next.sameAs(session)) return;
-        closeSession();
-        session = next;
+        adoptSession(LauncherSession.from(intent));
     }
 
-    private void closeSession() {
-        if (session != null && sessionStarted) session.send(this, LauncherSession.GAME_CLOSED, true);
-        sessionStarted = false;
+    /**
+     * Takes over a new launcher session while the game keeps running: the
+     * previous session is closed and the new one is started, so the launcher
+     * never keeps a stale session. Same or missing extras change nothing.
+     */
+    private void adoptSession(LauncherSession next) {
+        if (next == null || next.sameAs(session)) return;
+        LauncherSession previous = session;
+        session = next;
+        LauncherSession.setActive(next);
+        closeSession(previous);
+        // The engine is already running, so the new session starts right away.
+        if (mSDLThread != null) next.reportStarted(this);
+    }
+
+    /** Reports game_closed for a session (once) and stops being the active one. */
+    private void closeSession(LauncherSession old) {
+        if (old == null) return;
+        LauncherSession.clearActive(old);
+        old.reportClosed(this);
     }
 
     /** Sends the return key to the engine, the way a game expects it. */
@@ -374,9 +386,11 @@ public final class MkxpActivity extends SDLActivity implements InputManager.Inpu
             // Joins the engine thread: saves are complete when this returns.
             super.onDestroy();
         } finally {
+            // gameRunning turns false before game_closed reaches the launcher.
             instances--;
+            closeSession(session);
+            session = null;
         }
-        closeSession();
     }
 
     /** True for keys typed on the on-screen keyboard, which is not a physical device. */

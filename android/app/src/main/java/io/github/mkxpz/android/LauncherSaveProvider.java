@@ -160,8 +160,12 @@ public final class LauncherSaveProvider extends ContentProvider {
 
     private Bundle info() {
         Bundle result = new Bundle();
+        boolean running = MkxpActivity.isRunning();
         result.putInt("apiVersion", API_VERSION);
-        result.putBoolean("gameRunning", MkxpActivity.isRunning());
+        result.putBoolean("gameRunning", running);
+        // The session the game runs under; "" when there is none. The launcher
+        // reconciles the sessions whose game_closed was lost (killed process).
+        result.putString("sessionId", running ? LauncherSession.activeSessionId() : "");
         result.putString("saveTitle", saveTitle());
         if (BuildConfig.ALLOW_SHELL_CALLER) {
             // Debug builds only: is the installed launcher accepted by the allow-list?

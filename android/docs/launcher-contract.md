@@ -20,6 +20,7 @@ C. Save provider in every game APK (launcher -> game)
 - call("info") -> Bundle:
     apiVersion: Int = 1
     gameRunning: Boolean (MkxpActivity alive)
+    sessionId: String (SESSION_ID of the launcher session the game runs under, "" when there is none)
     saveTitle: String (Title from game/Game.ini, "" if missing)
     versionName: String, versionCode: Long (of the game APK)
 - openFile(content://<authority>/saves.zip, "r") -> streamed ZIP (via pipe) of the save scope (below), entry names relative to the save root, "/" separators, no directories-only entries required.
@@ -53,12 +54,15 @@ Code: `app/src/main/java/io/github/mkxpz/android/` — `LauncherSession` (A, B),
 - `SplashActivity` copies both extras to the `MkxpActivity` intent. `MkxpActivity.onNewIntent` (singleTask) swaps the session: `game_closed` for the old one, `game_started` for the new one.
 - `game_started` is sent the first time the SDL engine thread exists (polled every 100 ms from the activity), i.e. when the engine has really started, not when the activity is created.
 - `game_closed` is sent from `MkxpActivity.onDestroy` **after** `SDLActivity.onDestroy` returned (engine thread joined, saves written) and after `gameRunning` turned false, so the launcher can export/import right after it. If the process is killed (swipe from recents, `am force-stop`, task removal) no callback runs and `game_closed` is lost; the launcher must treat a vanished session as closed.
+- Every event is sent **at most once per session** (`gameId` + `sessionId` are the key): ending the activity and swapping the session cannot close the same session twice.
+- **Relaunch** (the launcher starts the game again while it is running): the new intent reaches `SplashActivity` (which copies the extras to `MkxpActivity`) and/or `MkxpActivity.onNewIntent`. With different extras the running game closes the old session (`game_closed`) and starts the new one (`game_started`, sent at once: the engine thread already exists). With the same extras, or with no extras at all, nothing changes. The game keeps running; only the session changes, so the launcher never keeps a stale session.
+- The session the game runs under lives in `LauncherSession.active`; `info` reports its id as `sessionId`, so the launcher can reconcile the sessions whose `game_closed` was lost (killed process).
 - Calls: `ContentResolver.call(content://com.fangamelauncher.app.naviaxp, "game_started"|"game_closed", null, {gameId, sessionId})` on a worker thread (the `game_closed` one is awaited at most 1.5 s). Exceptions are logged (`LauncherSession`) and ignored. Nothing is sent unless both extras are non-empty strings of at most 128 characters.
 
 ## C
 - Caller check on every entry point (`call`, `openFile`, `query`, `getType`, `insert`, `update`, `delete`): `Binder.getCallingUid()` must map (`getPackagesForUid`) to `com.fangamelauncher.app`, and **every** APK signer of that package (`getApkContentsSigners`, API 28+; `GET_SIGNATURES` below) must have its SHA-256 in `BuildConfig.LAUNCHER_CERT_SHA256` (Gradle `mkxpz.launcherCertSha256`, comma separated, uppercase hex without colons; default in `android/gradle.properties` is the launcher's release cert `EEAA788F…BFC57E`). Otherwise `SecurityException`.
 - Debug escape hatch: `-Pmkxpz.allowShellCaller=true` also accepts uid 2000 (shell) and 0 (root) and adds `debugLauncherAllowed` to `info`. Default `false`; forced `false` for the base APK (`-Pmkxpz.baseApk=true`). Never ship a game built with it.
-- `info` -> `{apiVersion: 1, gameRunning, saveTitle, versionName, versionCode (Long)}`. `saveTitle` is `Title=` of `[Game]` in `filesDir/game/Game.ini` (falls back to `assets/game/Game.ini`, then `""`).
+- `info` -> `{apiVersion: 1, gameRunning, sessionId, saveTitle, versionName, versionCode (Long)}`. `saveTitle` is `Title=` of `[Game]` in `filesDir/game/Game.ini` (falls back to `assets/game/Game.ini`, then `""`). `sessionId` is the id of the launcher session the game runs under ("" when the game runs without one, or when it is not running).
 - `saves.zip` ("r" only): deflated ZIP of the save scope, entries relative to `filesDir`, `/` separators, no directory entries, symlinks skipped, streamed through a pipe. Files are read as they are on disk (no snapshot): a save written by a running game can be captured half-way; check `gameRunning` first.
 - `import.zip` ("w"/"wt" only) -> staging file `files/.launcher-import/import.zip`. `commit_import` -> `{accepted, error?}`:
   - `game_running`: a `MkxpActivity` exists (rejected before touching anything).

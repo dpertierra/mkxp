@@ -7,13 +7,21 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Play session handed over by the Fangame Launcher (contract section A/B).
  *
  * <p>The launcher starts the game with two string extras. When both are
- * present, {@link #send} reports {@code game_started} / {@code game_closed}
- * to the launcher's provider. Every failure is ignored: the game never depends
+ * present, the session reports {@code game_started} / {@code game_closed} to
+ * the launcher's provider. Every failure is ignored: the game never depends
  * on the launcher.
+ *
+ * <p>Each event is reported at most once per session, and the session the
+ * game runs under is kept in {@link #active()}: the save provider reports it,
+ * so the launcher can reconcile the sessions whose {@code game_closed} was
+ * lost (the process was killed).
  */
 final class LauncherSession {
 
@@ -29,6 +37,18 @@ final class LauncherSession {
     private static final int MAX_ID_LENGTH = 128;
     /** Longest the main thread waits for the launcher to answer a notification. */
     private static final long WAIT_MS = 1500;
+
+    /** Guards the reported sets and the active session. */
+    private static final Object LOCK = new Object();
+    // ponytail: the sets grow with the sessions of one process; evict them if
+    // a long session ever plays thousands of them.
+    /** Sessions already announced, so game_started is sent once per session. */
+    private static final Set<String> STARTED = new HashSet<>();
+    /** Sessions already closed, so game_closed is sent once per session. */
+    private static final Set<String> CLOSED = new HashSet<>();
+
+    /** The session the game runs under, or null when there is none. */
+    private static volatile LauncherSession active;
 
     final String gameId;
     final String sessionId;
@@ -63,13 +83,54 @@ final class LauncherSession {
         return other != null && gameId.equals(other.gameId) && sessionId.equals(other.sessionId);
     }
 
+    /** Session id of the running session, "" when there is none. */
+    static String activeSessionId() {
+        LauncherSession session = active;
+        return session == null ? "" : session.sessionId;
+    }
+
+    /** Makes {@code session} the one the game runs under. */
+    static void setActive(LauncherSession session) {
+        synchronized (LOCK) {
+            active = session;
+        }
+    }
+
+    /** Drops the active session, but only when it is still {@code session}. */
+    static void clearActive(LauncherSession session) {
+        synchronized (LOCK) {
+            if (active == session) active = null;
+        }
+    }
+
+    /** Reports game_started, at most once per session. */
+    void reportStarted(Context context) {
+        synchronized (LOCK) {
+            if (!STARTED.add(key())) return;
+        }
+        send(context, GAME_STARTED, false);
+    }
+
+    /** Reports game_closed, at most once per session. */
+    void reportClosed(Context context) {
+        synchronized (LOCK) {
+            if (!CLOSED.add(key())) return;
+        }
+        send(context, GAME_CLOSED, true);
+    }
+
+    /** Identifies the session: game id and session id. */
+    private String key() {
+        return gameId + '\n' + sessionId;
+    }
+
     /**
      * Sends {@code method} to the launcher on a worker thread.
      *
      * @param wait keep the caller blocked (briefly) so the call is not lost
      *             when the process is about to end.
      */
-    void send(Context context, String method, boolean wait) {
+    private void send(Context context, String method, boolean wait) {
         Context app = context.getApplicationContext();
         Thread thread = new Thread(() -> {
             Bundle extras = new Bundle();
