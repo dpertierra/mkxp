@@ -52,11 +52,6 @@ endif
 global_sources += binding_source
 
 if host_system == 'android'
-    global_sources += custom_target('android-map-scans',
-        input: 'android-map-scans.rb',
-        output: 'android-map-scans.xxd',
-        command: [xxd, '-i', '-n', 'android_map_scans', '@INPUT@'],
-        capture: true)
     global_sources += custom_target('android-apk-filesystem',
         input: 'android-apk-filesystem.rb',
         output: 'android-apk-filesystem.xxd',

@@ -39,7 +39,6 @@
 
 #ifdef __ANDROID__
 #include "android-apk-filesystem.xxd"
-#include "android-map-scans.xxd"
 #endif
 
 #include "sharedstate.h"
@@ -1318,11 +1317,9 @@ static void mriBindingExecute() {
 
 #ifdef __ANDROID__
     // Install before custom scripts and preload.rb, not after the game's helpers.
-    if (evalScript(newStringUTF8(reinterpret_cast<const char *>(android_map_scans),
-                                android_map_scans_len), "<android-map-scans>") &&
-        (!shState->fileSystem().hasApk() ||
-         evalScript(newStringUTF8(reinterpret_cast<const char *>(android_apk_filesystem),
-                                 android_apk_filesystem_len), "<android-apk-filesystem>")))
+    if (!shState->fileSystem().hasApk() ||
+        evalScript(newStringUTF8(reinterpret_cast<const char *>(android_apk_filesystem),
+                                 android_apk_filesystem_len), "<android-apk-filesystem>"))
 #endif
     {
     
