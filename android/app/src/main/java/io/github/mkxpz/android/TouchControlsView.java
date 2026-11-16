@@ -484,7 +484,7 @@ public final class TouchControlsView extends FrameLayout {
 
         Rect safe = new Rect();
         getSafeBounds(safe);
-        gearR = Math.max(0.035f * unit, 24f * getResources().getDisplayMetrics().density);
+        gearR = Math.max(0.025f * unit, 16f * getResources().getDisplayMetrics().density);
         gearX = safe.left + margin + gearR;
         gearY = safe.top + margin + gearR;
         if (gearAnchor != null) {
@@ -678,7 +678,7 @@ public final class TouchControlsView extends FrameLayout {
                 Touch touch = new Touch(hit);
                 touches.put(event.getPointerId(index), touch);
                 if (hit == HIT_DPAD) {
-                    applyDpad(touch, dpadMaskAt(x, y));
+                    applyDpad(touch, dpadMaskAt(x, y, touch.dirMask));
                 } else {
                     int key = controls.get(hit).spec.keyCode;
                     pressKey(key);
@@ -699,7 +699,7 @@ public final class TouchControlsView extends FrameLayout {
                     if (index < 0) {
                         continue;
                     }
-                    changed |= applyDpad(touch, dpadMaskAt(event.getX(index), event.getY(index)));
+                    changed |= applyDpad(touch, dpadMaskAt(event.getX(index), event.getY(index), touch.dirMask));
                 }
                 if (changed) {
                     invalidate();
@@ -853,7 +853,9 @@ public final class TouchControlsView extends FrameLayout {
     private boolean hitGear(float x, float y) {
         float dx = x - gearX;
         float dy = y - gearY;
-        return dx * dx + dy * dy <= gearR * gearR * 1.5f;
+        /* Easier to hit than it looks, but at least a 48dp target. */
+        float r = Math.max(gearR * 1.25f, 24f * getResources().getDisplayMetrics().density);
+        return dx * dx + dy * dy <= r * r;
     }
 
     private static boolean hit(Control control, float x, float y) {
@@ -865,8 +867,14 @@ public final class TouchControlsView extends FrameLayout {
         return dx * dx + dy * dy <= r * r;
     }
 
-    /** Directions of the d-pad under the given point. */
-    private int dpadMaskAt(float x, float y) {
+    /**
+     * Direction of the d-pad under the given point. Four-way only: RPG Maker
+     * moves in four directions, and a diagonal sends two arrows at once, so
+     * aiming down slightly to the right could walk right. The current
+     * direction is kept until the finger is clearly in another quadrant, so a
+     * thumb resting near a border does not flicker between two directions.
+     */
+    private int dpadMaskAt(float x, float y, int current) {
         if (distance(x, y, dpad.cx, dpad.cy) < dpad.r * 0.30f) {
             return 0; /* dead zone */
         }
@@ -874,24 +882,22 @@ public final class TouchControlsView extends FrameLayout {
         if (angle < 0) {
             angle += 360.0;
         }
-        if (angle < 22.5) {
-            return DIR_RIGHT;
-        } else if (angle < 67.5) {
-            return DIR_RIGHT | DIR_DOWN;
-        } else if (angle < 112.5) {
-            return DIR_DOWN;
-        } else if (angle < 157.5) {
-            return DIR_DOWN | DIR_LEFT;
-        } else if (angle < 202.5) {
-            return DIR_LEFT;
-        } else if (angle < 247.5) {
-            return DIR_LEFT | DIR_UP;
-        } else if (angle < 292.5) {
-            return DIR_UP;
-        } else if (angle < 337.5) {
-            return DIR_UP | DIR_RIGHT;
+        double held = current == DIR_RIGHT ? 0.0 : current == DIR_DOWN ? 90.0
+                : current == DIR_LEFT ? 180.0 : current == DIR_UP ? 270.0 : -1.0;
+        if (held >= 0.0) {
+            double off = Math.abs(angle - held);
+            if (Math.min(off, 360.0 - off) < 55.0) {
+                return current;
+            }
         }
-        return DIR_RIGHT;
+        if (angle < 45.0 || angle >= 315.0) {
+            return DIR_RIGHT;
+        } else if (angle < 135.0) {
+            return DIR_DOWN;
+        } else if (angle < 225.0) {
+            return DIR_LEFT;
+        }
+        return DIR_UP;
     }
 
     /** Applies a new d-pad direction, pressing and releasing what changed. */
