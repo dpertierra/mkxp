@@ -147,10 +147,17 @@ Variables opcionales:
 - `JOBS`: paralelismo de Ninja; por defecto `nproc`.
 
 El script configura Meson con `meson-cross-arm64.ini`, aísla
-`PKG_CONFIG_LIBDIR` y pasa `-Dmri_version=3.1 -Denable-https=false
+`PKG_CONFIG_LIBDIR` y pasa `-Dmri_version=3.1 -Denable-https=true
 -Duse_miniffi=false -Dshared_fluid=false -Dgfx_backend=gles`. No descarga ni
 recompila las deps. El cross-file resuelve los compiladores desde el NDK en
 `PATH`; no contiene rutas personales.
+
+HTTPS requiere `make -C android/deps openssl` en prefijos anteriores.
+El manifest declara `INTERNET`; HTTPLite mantiene la verificación del certificado
+y del hostname en Android. Carga las raíces PEM de
+`/apex/com.android.conscrypt/cacerts` (Android moderno), o de
+`/system/etc/security/cacerts` si el primero no existe. No usa esos directorios
+como CApath: sus nombres hash antiguos no coinciden con los de OpenSSL 3.
 
 Ninja genera `android/build-native/libmain.so` (**no** `src/libmain.so`).
 Meson instala una copia sin RPATH del host en `build-native/stage/lib/`;
@@ -295,8 +302,12 @@ rutas absolutas o que escapan de esa raíz siguen usando disco. Los archivos
 reales tienen prioridad; las escrituras siguen pasando a `File` nativo.
 Los helpers de Essentials como `safeExists?` y `pbResolveBitmap` pueden usar
 estas operaciones sin una copia de los gráficos. La resolución virtual de
-nombres usa el caché del motor y, para directorios o caché desactivado,
-recorre componentes con comparación de mayúsculas ASCII.
+nombres usa el caché del motor, incluidos los directorios en Android. Con
+`pathCache: true` (por defecto), una ausencia en el índice no enumera los
+directorios del APK en cada consulta. Se comprueba primero la ruta exacta,
+con prioridad del disco extraído. Solo con el caché desactivado se recorren
+componentes con comparación de mayúsculas ASCII. Tras crear rutas nuevas con
+otra capitalización, `System.reload_cache` reconstruye el índice existente.
 
 Límites conocidos:
 
@@ -703,7 +714,7 @@ ABIs: solo `arm64-v8a`. `minSdk 26`, `targetSdk 35` (`compileSdk 36`).
   Bluetooth y USB opcionales; `android:isGame="true"`;
   `configChanges` como en la plantilla de SDL; `sensorLandscape` y pantalla
   encendida (`FLAG_KEEP_SCREEN_ON`) en `MkxpActivity`.
-- Android omite Theora, FluidSynth, OpenSSL, MiniFFI y las dependencias de
+- Android omite Theora, FluidSynth, MiniFFI y las dependencias de
   escritorio (X11/GTK, bzip2, libcharset, SDL2main). `Graphics.playMovie`
   informa de que la reproducción de vídeo no está disponible.
 - Ruby se enlaza estático con `libruby-ext.a`; empaquetar el runtime Ruby y

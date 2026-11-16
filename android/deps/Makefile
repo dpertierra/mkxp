@@ -17,7 +17,7 @@
 # its Java-side bootstrap expects a shared library. Every other lib is static.
 #
 # TODO (out of scope for the first stage, see PLAN_PORT_ANDROID.md Fase 1):
-#   OpenSSL (HTTPS/HTTPLite), Theora (video), FluidSynth (MIDI).
+#   Theora (video), FluidSynth (MIDI).
 #   MiniFFI stays off (fiddle is excluded from Ruby), Steamworks is excluded.
 
 ARCH ?= arm64
@@ -201,6 +201,28 @@ $(DOWNLOADS)/libiconv-1.18.tar.gz:
 	mkdir -p $(DOWNLOADS)
 	curl -fL https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz -o $@.part
 	echo '3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8  $@.part' | sha256sum -c -
+	mv $@.part $@
+
+# OpenSSL
+openssl: init_dirs check-toolchain $(LIBDIR)/libssl.a
+
+$(LIBDIR)/libssl.a: | $(DOWNLOADS)/openssl-3.5.6/Makefile
+	set -e; export PATH="$(TOOLCHAIN)/bin:$$PATH"; \
+	cd $(DOWNLOADS)/openssl-3.5.6; $(MAKE) -j$(NPROC); $(MAKE) install_sw
+
+$(DOWNLOADS)/openssl-3.5.6/Makefile: $(DOWNLOADS)/openssl-3.5.6/Configure
+	cd $(DOWNLOADS)/openssl-3.5.6; \
+	ANDROID_NDK_ROOT="$(NDK)" PATH="$(TOOLCHAIN)/bin:$$PATH" \
+	./Configure android-arm64 -D__ANDROID_API__=$(API) no-shared no-tests \
+	-fPIC --prefix="$(BUILD_PREFIX)" --libdir=lib
+
+$(DOWNLOADS)/openssl-3.5.6/Configure: | $(DOWNLOADS)/openssl-3.5.6.tar.gz
+	tar -xzf $(DOWNLOADS)/openssl-3.5.6.tar.gz -C $(DOWNLOADS)
+
+$(DOWNLOADS)/openssl-3.5.6.tar.gz:
+	mkdir -p $(DOWNLOADS)
+	curl -fL https://github.com/openssl/openssl/releases/download/openssl-3.5.6/openssl-3.5.6.tar.gz -o $@.part
+	echo 'deae7c80cba99c4b4f940ecadb3c3338b13cb77418409238e57d7f31f2a3b736  $@.part' | sha256sum -c -
 	mv $@.part $@
 
 # libpng
@@ -545,5 +567,5 @@ powerwash: clean-downloads
 clean-downloads:
 	-rm -rf downloads
 
-deps-core: zlib libpng libogg libvorbis libopusfile pixman uchardet iconv freetype physfs sdl2 sdl2image sdlsound sdl2ttf openal
+deps-core: zlib libpng libogg libvorbis libopusfile pixman uchardet iconv freetype physfs sdl2 sdl2image sdlsound sdl2ttf openal openssl
 everything: deps-core ruby

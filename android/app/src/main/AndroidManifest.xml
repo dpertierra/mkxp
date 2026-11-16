@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- MKXP-Z renders through the GLES 2 backend (gfx_backend=gles). -->
     <uses-feature
         android:glEsVersion="0x00020000"

@@ -27,6 +27,7 @@ regenerated from source, never committed.
 make -C android/deps            # everything (deps-core + ruby)
 make -C android/deps deps-core  # everything except Ruby
 make -C android/deps sdl2 libpng
+make -C android/deps openssl    # add HTTPS to an existing prefix
 ```
 
 If a prefix from the initial dependency build already exists, only add the
@@ -69,6 +70,7 @@ Then, for the engine build:
 | SDL2_ttf (mkxp-z fork) | `libSDL2_ttf.a` | fork patches ANDROID to the SDL Android.mk flow, patched to the desktop CMake path |
 | SDL_sound (mkxp-z fork) | `libSDL2_sound.a` | vendored stb_vorbis/libmodplug, so no vorbis/modplug link deps; MIDI off |
 | OpenAL Soft 1.24.3 | `libopenal.a` | **OpenSL ES only**; AAudio is not a backend upstream (verified through 1.25.2). C++ library, so consumers must link with the C++ driver (`libc++_shared`) |
+| OpenSSL 3.5.6 | `libssl.a`, `libcrypto.a` | SHA-256-checked release; `android-arm64`, API 26, PIC, static; HTTPLite verifies against Android system roots |
 | MRI Ruby 3.1.3 (mkxp-z fork) | `libruby-static.a` + `libruby-ext.a` | see below |
 
 `.pc` files are provided for every dependency, including the ones whose build
@@ -106,8 +108,6 @@ $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-androi
 
 ## Deliberately out of scope (Fase 1 decisions)
 
-- **OpenSSL**: omitted; build with `enable-https=false` until the game needs it.
-  Adding it means cloning openssl and appending `-lssl -lcrypto` to the engine.
 - **Theora**: omitted (no video playback in the first stage).
 - **FluidSynth**: omitted (MIDI not required yet).
 - **MiniFFI/fiddle**: `fiddle` is excluded from Ruby; `use_miniffi=false`.
@@ -122,3 +122,5 @@ zlib, libpng/libogg/libvorbis BSD-like, FreeType FTL/GPLv2, Ruby Ruby-license/
 BSD, OpenAL Soft **LGPL-2.1+**. OpenAL Soft is statically linked here, which for
 LGPL requires shipping relinkable objects; revisit (shared `libopenal.so` or
 object files) before distributing an APK.
+OpenSSL 3.5.6 is Apache-2.0; HTTPS builds use the project's
+`assets/LICENSE.mkxp-z-with-https.txt` licensing terms.
