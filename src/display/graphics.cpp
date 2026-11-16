@@ -71,6 +71,69 @@
 #include <cmath>
 #include <climits>
 
+#ifdef __ANDROID__
+#include <dlfcn.h>
+
+/* ADPF performance hints (Android 13+). Phone governors cap the CPU clock of
+ * apps that look light; reporting each frame's work time against its budget
+ * lets the system raise the clock when the game falls behind (map loads, big
+ * scenes). Resolved at runtime so older Android versions just skip it. */
+struct AndroidPerfHint {
+    typedef void *(*GetManagerFn)();
+    typedef void *(*CreateSessionFn)(void *, const int32_t *, size_t, int64_t);
+    typedef int (*UpdateTargetFn)(void *, int64_t);
+    typedef int (*ReportActualFn)(void *, int64_t);
+
+    void *session = nullptr;
+    UpdateTargetFn updateTarget = nullptr;
+    ReportActualFn reportActual = nullptr;
+    int64_t target = 0;
+    uint64_t workStart = 0;
+    bool tried = false;
+
+    static uint64_t nowNs() {
+        timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return uint64_t(ts.tv_sec) * 1000000000ull + uint64_t(ts.tv_nsec);
+    }
+
+    void init(int64_t targetNs) {
+        tried = true;
+        void *lib = dlopen("libandroid.so", RTLD_NOW);
+        if (!lib)
+            return;
+        GetManagerFn getManager = (GetManagerFn)dlsym(lib, "APerformanceHint_getManager");
+        CreateSessionFn createSession = (CreateSessionFn)dlsym(lib, "APerformanceHint_createSession");
+        updateTarget = (UpdateTargetFn)dlsym(lib, "APerformanceHint_updateTargetWorkDuration");
+        reportActual = (ReportActualFn)dlsym(lib, "APerformanceHint_reportActualWorkDuration");
+        void *manager = getManager ? getManager() : nullptr;
+        if (!manager || !createSession || !updateTarget || !reportActual)
+            return;
+        int32_t tid = gettid();
+        session = createSession(manager, &tid, 1, targetNs);
+        target = targetNs;
+        Debug() << "Performance hint session:" << (session ? "active" : "unavailable");
+    }
+
+    /* Everything since the previous frame was presented (Ruby + rendering)
+     * is this frame's work. Called right before the frame limiter sleeps. */
+    void frameWorkDone(int fps) {
+        int64_t targetNs = fps > 0 ? 1000000000ll / fps : 16666667ll;
+        if (!tried)
+            init(targetNs);
+        if (!session || !workStart)
+            return;
+        if (targetNs != target && updateTarget(session, targetNs) == 0)
+            target = targetNs;
+        int64_t actual = int64_t(nowNs() - workStart);
+        if (actual > 0)
+            reportActual(session, actual);
+    }
+
+    void frameStart() { workStart = nowNs(); }
+};
+#endif
+
 
 #define DEF_SCREEN_W (rgssVer == 1 ? 640 : 544)
 #define DEF_SCREEN_H (rgssVer == 1 ? 480 : 416)
@@ -819,6 +882,9 @@ struct GraphicsPrivate {
     
     
     FPSLimiter fpsLimiter;
+#ifdef __ANDROID__
+    AndroidPerfHint perfHint;
+#endif
     
     // Can be set from Ruby. Takes priority over config setting.
     bool useFrameSkip;
@@ -1043,9 +1109,15 @@ struct GraphicsPrivate {
     }
     
     void swapGLBuffer() {
+#ifdef __ANDROID__
+        perfHint.frameWorkDone(frameRate);
+#endif
         fpsLimiter.delay();
         SDL_GL_SwapWindow(threadData->window);
-        
+#ifdef __ANDROID__
+        perfHint.frameStart();
+#endif
+
         ++frameCount;
         
         threadData->ethread->notifyFrame();
