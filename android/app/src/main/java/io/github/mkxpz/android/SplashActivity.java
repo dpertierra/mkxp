@@ -33,6 +33,8 @@ public final class SplashActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_splash);
+        // Repackaged game APKs only rewrite the manifest label, not this resource.
+        ((TextView) findViewById(R.id.splash_title)).setText(getApplicationInfo().loadLabel(getPackageManager()));
 
         status = findViewById(R.id.splash_status);
         progress = findViewById(R.id.splash_progress);
