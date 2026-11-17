@@ -199,7 +199,11 @@ $(DOWNLOADS)/libiconv-1.18/configure: | $(DOWNLOADS)/libiconv-1.18.tar.gz
 
 $(DOWNLOADS)/libiconv-1.18.tar.gz:
 	mkdir -p $(DOWNLOADS)
-	curl -fL https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz -o $@.part
+	# ftp.gnu.org is often unreachable from CI: fall back to GNU mirrors (the
+	# checksum below still pins the file).
+	for url in https://ftp.gnu.org/pub/gnu https://ftpmirror.gnu.org https://mirrors.ocf.berkeley.edu/gnu; do \
+	  curl -fL --retry 2 --connect-timeout 20 $$url/libiconv/libiconv-1.18.tar.gz -o $@.part && break; \
+	done
 	echo '3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8  $@.part' | sha256sum -c -
 	mv $@.part $@
 
