@@ -451,6 +451,8 @@ $(DOWNLOADS)/openal/CMakeLists.txt:
 # `make install` copies the archives with `install -p`, preserving the build
 # timestamp, which is older than the libs installed afterwards (libz.a); the
 # touch keeps this target from looking stale on the next run.
+# Default and bundled gems are skipped: the engine does not use them, and a
+# Debian/Ubuntu host ruby makes rbinstall put them in /var/lib/gems (EACCES).
 ruby: init_dirs zlib $(LIBDIR)/libruby-static.a
 
 $(LIBDIR)/libruby-static.a: $(LIBDIR)/libz.a | $(DOWNLOADS)/ruby/Makefile
@@ -458,7 +460,7 @@ $(LIBDIR)/libruby-static.a: $(LIBDIR)/libz.a | $(DOWNLOADS)/ruby/Makefile
 	  echo "host ruby has no erb: install it (gem install erb) and retry"; exit 1; }
 	set -e; cd $(DOWNLOADS)/ruby; \
 	make -j$(NPROC); \
-	make install; \
+	make install INSTRUBY_OPTS=--exclude=gem; \
 	touch $(LIBDIR)/libruby-static.a; \
 	$(call merge_ruby_ext); \
 	$(call write_ruby_pc)
