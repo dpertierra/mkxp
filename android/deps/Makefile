@@ -37,6 +37,7 @@ RANLIB := $(TOOLCHAIN)/bin/llvm-ranlib
 
 OPENAL_FLAGS := -DALSOFT_CPUEXT_NEON=no ${OPENAL_FLAGS}
 RUBY_FLAGS := ${RUBY_FLAGS}
+RUBY_TARBALL ?= https://github.com/dpertierra/ruby/releases/download/mkxp-z-4.0.9-2/ruby-4.0.9-mkxpz-2.tar.gz
 
 BUILD_PREFIX := $(CURDIR)/build-$(ARCH)
 LIBDIR := $(BUILD_PREFIX)/lib
@@ -76,7 +77,7 @@ CONFIGURE := $(CONFIGURE_ENV) ./configure $(CONFIGURE_ARGS)
 CMAKE     := $(CONFIGURE_ENV) cmake -G "Unix Makefiles" .. $(CMAKE_ARGS)
 
 # Host interpreter used to generate sources for the target build. Required for
-# cross-compiling MRI; a host ruby >= 2.7 is enough. Must be defined before
+# cross-compiling MRI; a host ruby >= 3.1 is needed. Must be defined before
 # RUBY_CONFIGURE_ARGS (immediately expanded), or --with-baseruby ends up empty.
 BASERUBY ?= $(shell command -v ruby)
 
@@ -94,6 +95,7 @@ RUBY_CONFIGURE_ARGS := \
 	--with-out-ext=openssl,readline,dbm,gdbm,fiddle \
 	--with-static-linked-ext \
 	--disable-rubygems \
+	--disable-yjit \
 	--without-gmp \
 	--with-opt-dir="$(BUILD_PREFIX)" \
 	--with-baseruby="$(BASERUBY)$(if $(ERB_LIB), -I$(ERB_LIB))"
@@ -451,7 +453,7 @@ $(DOWNLOADS)/openal/CMakeLists.txt:
 
 # MRI Ruby, static, no shared lib: the engine links libruby-static.a and the
 # extensions are linked in (--with-static-linked-ext).
-# Ruby does not install a .pc file, so ruby-3.1.pc is generated here.
+# Ruby does not install a .pc file, so ruby-4.0.pc is generated here.
 # `make install` copies the archives with `install -p`, preserving the build
 # timestamp, which is older than the libs installed afterwards (libz.a); the
 # touch keeps this target from looking stale on the next run.
@@ -480,10 +482,11 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 	set -e; cd $(DOWNLOADS)/ruby; autoreconf -i
 
 $(DOWNLOADS)/ruby/configure.ac:
-	$(CLONE) $(GITHUB)/mkxp-z/ruby $(DOWNLOADS)/ruby --single-branch --branch mkxp-z-3.1.3 --depth 1
+	mkdir -p $(DOWNLOADS)/ruby; \
+	curl -fsSL $(RUBY_TARBALL) | tar -xzf - -C $(DOWNLOADS)/ruby --strip-components=1
 
 # -std=gnu99 is needed with GCC 15+ / clang defaulting to newer C dialects, for
-# Ruby versions that aren't valid C23 (3.1.x is one of those).
+# Ruby versions that aren't valid C23 (the 4.0.x line is one of those).
 
 # ====
 # Move .pc files that installed outside lib/pkgconfig into the prefix's
@@ -518,10 +521,10 @@ define write_pc
 endef
 
 # Same, but the include paths are discovered at recipe time (Ruby installs
-# headers in ruby-3.1.0/ and the arch-specific config.h in a sibling dir).
+# headers in ruby-4.0.0/ and the arch-specific config.h in a sibling dir).
 define write_ruby_pc
 	mkdir -p $(LIBDIR)/pkgconfig; \
-	hdr=$$(ls $(INCLUDEDIR) | grep '^ruby-3\.' | head -1); \
+	hdr=$$(ls $(INCLUDEDIR) | grep '^ruby-[0-9]' | head -1); \
 	arch=$$(ls $(INCLUDEDIR)/$$hdr | grep -v '\.' | head -1); \
 	printf '%s\n' \
 	  'prefix=$(BUILD_PREFIX)' \
@@ -529,13 +532,13 @@ define write_ruby_pc
 	  'libdir=$${prefix}/lib' \
 	  'includedir=$${prefix}/include' \
 	  '' \
-	  'Name: ruby-3.1' \
-	  'Description: MRI Ruby 3.1 for Android arm64 (static, cross-built by android/deps/Makefile)' \
-	  'Version: 3.1.3' \
+	  'Name: ruby-4.0' \
+	  'Description: MRI Ruby 4.0 for Android arm64 (static, cross-built by android/deps/Makefile)' \
+	  'Version: 4.0.9' \
 	  'Libs: -L$${libdir} -lruby-static' \
 	  'Libs.private: -lruby-ext -lz -lm -ldl -llog' \
 	  'Cflags: -I$${includedir}/'"$$hdr"' -I$${includedir}/'"$$hdr"'/'"$$arch" \
-	  > $(LIBDIR)/pkgconfig/ruby-3.1.pc
+	  > $(LIBDIR)/pkgconfig/ruby-4.0.pc
 endef
 
 # --with-static-linked-ext compiles every extension into its own ext/**/<ext>.a

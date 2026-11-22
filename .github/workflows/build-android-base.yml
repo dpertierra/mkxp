@@ -37,11 +37,16 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      # Host ruby used as BASERUBY when cross-compiling Ruby 4.0 (needs >= 3.1 and the erb library).
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+
       - name: Install apt dependencies
         run: |
           sudo apt update
           sudo apt install -y git curl build-essential cmake autoconf automake libtool \
-            pkg-config ruby xxd unzip python3-venv
+            pkg-config xxd unzip python3-venv
 
       - name: Install Meson and Ninja
         run: |

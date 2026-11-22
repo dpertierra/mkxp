@@ -71,11 +71,11 @@ Then, for the engine build:
 | SDL_sound (mkxp-z fork) | `libSDL2_sound.a` | vendored stb_vorbis/libmodplug, so no vorbis/modplug link deps; MIDI off |
 | OpenAL Soft 1.24.3 | `libopenal.a` | **OpenSL ES only**; AAudio is not a backend upstream (verified through 1.25.2). C++ library, so consumers must link with the C++ driver (`libc++_shared`) |
 | OpenSSL 3.5.6 | `libssl.a`, `libcrypto.a` | SHA-256-checked release; `android-arm64`, API 26, PIC, static; HTTPLite verifies against Android system roots |
-| MRI Ruby 3.1.3 (mkxp-z fork) | `libruby-static.a` + `libruby-ext.a` | see below |
+| MRI Ruby 4.0.9 (mkxp-z fork, release tarball) | `libruby-static.a` + `libruby-ext.a` | see below |
 
 `.pc` files are provided for every dependency, including the ones whose build
 systems do not generate them (`SDL2_image`, `SDL2_sound`, `freetype2`,
-`ruby-3.1`), and the ones that ship an incomplete one (`SDL2_ttf` misses its
+`ruby-4.0`), and the ones that ship an incomplete one (`SDL2_ttf` misses its
 static FreeType dependency).
 
 Every CMake dependency is configured with `-DANDROID_STL=c++_shared`, so the APK
@@ -84,7 +84,7 @@ must ship `libc++_shared.so` (the Gradle/native build side owns that).
 ### Ruby specifics
 
 Configured with `--host=aarch64-linux-android --disable-shared
---disable-install-doc --with-static-linked-ext --disable-rubygems
+--disable-install-doc --with-static-linked-ext --disable-rubygems --disable-yjit
 --with-out-ext=openssl,readline,dbm,gdbm,fiddle`.
 
 Two non-obvious parts:
@@ -92,10 +92,10 @@ Two non-obvious parts:
 - `--with-static-linked-ext` builds one `ext/**/<ext>.a` per extension but does
   not put those objects into `libruby-static.a`, while `extinit.o` (which *is* in
   the archive) references `Init_<ext>`. The Makefile merges all ext archives
-  into `lib/libruby-ext.a`; `ruby-3.1.pc` lists it in `Libs.private` after
+  into `lib/libruby-ext.a`; `ruby-4.0.pc` lists it in `Libs.private` after
   `-lruby-static`.
-- Headers land in `include/ruby-3.1.0/` plus an arch directory
-  (`include/ruby-3.1.0/aarch64-linux-android-android/` for `config.h`); the `.pc`
+- Headers land in `include/ruby-4.0.0/` plus an arch directory
+  (`include/ruby-4.0.0/aarch64-linux-android-android/` for `config.h`); the `.pc`
   exposes both.
 
 Smoke test (host compile, no execution):
@@ -103,7 +103,7 @@ Smoke test (host compile, no execution):
 ```sh
 export PKG_CONFIG_LIBDIR=$PWD/build-arm64/lib/pkgconfig
 $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang \
-  -o /tmp/rubytest test.c $(pkg-config --cflags --libs --static ruby-3.1)
+  -o /tmp/rubytest test.c $(pkg-config --cflags --libs --static ruby-4.0)
 ```
 
 ## Deliberately out of scope (Fase 1 decisions)

@@ -25,7 +25,7 @@ unset PKG_CONFIG_SYSROOT_DIR
 for tool in meson ninja pkg-config xxd llvm-readelf llvm-nm llvm-strip; do
     command -v "$tool" >/dev/null || fail "Missing host tool: $tool"
 done
-pkg-config --exists ruby-3.1 physfs openal sdl2 SDL2_sound SDL2_ttf \
+pkg-config --exists ruby-4.0 physfs openal sdl2 SDL2_sound SDL2_ttf \
     SDL2_image freetype2 pixman-1 libpng zlib uchardet vorbisfile opusfile openssl \
     || fail "Incomplete deps prefix: $DEPS_PREFIX (run make -C android/deps)"
 [[ "$(pkg-config --modversion sdl2)" == 2.28.1 ]] \
@@ -41,7 +41,7 @@ if [[ -f "$BUILD_DIR/meson-private/coredata.dat" ]]; then
 fi
 meson setup "${SETUP_ARGS[@]}" "$BUILD_DIR" "$ROOT_DIR" \
     --cross-file "$SCRIPT_DIR/meson-cross-arm64.ini" --prefix=/ --libdir=lib \
-    -Dbuildtype=release -Dstrip=true -Dmri_version=3.1 -Dgfx_backend=gles \
+    -Dbuildtype=release -Dstrip=true -Dmri_version=4.0 -Dgfx_backend=gles \
     -Denable-https=true -Duse_miniffi=false -Dshared_fluid=false
 ninja -C "$BUILD_DIR" -j "${JOBS:-$(nproc)}"
 meson install -C "$BUILD_DIR" --destdir "$BUILD_DIR/stage" --no-rebuild
