@@ -72,6 +72,15 @@ jobs:
           cp ../../mkxp.json .
           cp -r ../../scripts .
           cp ../../assets/LICENSE.mkxp-z-with-https.txt .
+          # Copy every MSYS2 DLL the binaries link against (zlib is libz-1.dll on current MSYS2)
+          for _ in 1 2 3
+          do
+            ldd *.exe *.dll | sed -n 's/.*=> \(.*\) (0x.*/\1/p' | sort -u | while read -r dll
+            do
+              dll="$(cygpath -u "$dll")"
+              case "$dll" in */mingw64/bin/*) cp -n "$dll" . ;; esac
+            done
+          done
 
       - name: Check for DLLs missing from the artifact
         shell: msys2 {0}
