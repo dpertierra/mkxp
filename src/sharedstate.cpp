@@ -122,7 +122,7 @@ struct SharedStatePrivate
         
         startupTime = std::chrono::steady_clock::now();
         
-		/* Shaders have been compiled in ShaderSet's constructor */
+		/* Legacy shaders compile in ShaderSet's constructor; the perspective shader compiles on first use. */
 		if (gl.ReleaseShaderCompiler)
 			gl.ReleaseShaderCompiler();
 
@@ -140,6 +140,10 @@ struct SharedStatePrivate
 		}
 
 		fileSystem.addPath(".");
+
+#ifdef __ANDROID__
+		fileSystem.addApk(SDL_getenv("MKXPZ_APK_PATH"));
+#endif
 
 		for (size_t i = 0; i < config.rtps.size(); ++i)
 			fileSystem.addPath(config.rtps[i].c_str());

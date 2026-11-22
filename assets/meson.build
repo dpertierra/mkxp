@@ -17,7 +17,7 @@ foreach file : embedded_assets_f
     input: file,
     output: '@0@.xxd'.format(embedded_assets[count]),
     command: [
-        xxd, '-i', '@INPUT@'
+        xxd, '___assets_' + embedded_assets[count].replace('.', '_'), '@INPUT@'
     ],
     capture: true,
     depend_files: embedded_assets_f[count]

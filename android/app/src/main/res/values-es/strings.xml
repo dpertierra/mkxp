@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="controls_menu_title">Controles</string>
+    <string name="controls_hide">Ocultar controles</string>
+    <string name="controls_reset">Reiniciar juego</string>
+    <string name="controls_reset_confirm">Toca otra vez para reiniciar (se pierde lo no guardado)</string>
+    <string name="gamepad_title">Mando</string>
+    <string name="gamepad_hint">Pulsa un botón del mando para resaltarlo. Toca una casilla para cambiar su tecla.</string>
+    <string name="gamepad_section_buttons">Botones</string>
+    <string name="gamepad_section_triggers">Gatillos</string>
+    <string name="gamepad_section_sticks">Sticks</string>
+    <string name="gamepad_section_menu">Menú</string>
+    <string name="gamepad_section_dpad">Cruceta</string>
+    <string name="controls_keys_letters">Letras</string>
+    <string name="controls_keys_numbers">Números</string>
+    <string name="controls_keys_arrows">Flechas</string>
+    <string name="controls_keys_special">Especiales</string>
+    <string name="controls_keys_hint">Elige una tecla o activa la captura física.</string>
+    <string name="controls_keys_capture">Pulsa una tecla…</string>
+    <string name="controls_keys_for">Tecla · %1$s</string>
+    <string name="gamepad_binding">%1$s: %2$s</string>
+    <string name="gamepad_changed">Cambiado</string>
+    <string name="gamepad_unassigned">Sin asignar</string>
+    <string name="gamepad_default">Por defecto</string>
+    <string name="gamepad_restore_all">Restaurar todo</string>
+    <string name="gamepad_restore_title">¿Restaurar todos los botones del mando?</string>
+    <string name="gamepad_restore_message">Devuelve cada botón a su tecla predeterminada. Pulsa Guardar para conservar los cambios o Cancelar para descartarlos.</string>
+    <string name="gamepad_key_c">C · Aceptar</string>
+    <string name="gamepad_key_x">X · Atrás / Menú</string>
+    <string name="gamepad_key_z">Z · Acción/Correr</string>
+    <string name="gamepad_key_escape">Esc · Atrás / Menú</string>
+    <string name="gamepad_choose_key">%1$s: elige una tecla abajo o pulsa Tecla física para usar el teclado.</string>
+    <string name="gamepad_press_key">Pulsa una tecla del teclado. Atrás cancela; usa la lista si el sistema intercepta una tecla.</string>
+    <string name="gamepad_save_error">No se pudo guardar el mapa del mando. Los cambios siguen aquí; vuelve a pulsar Guardar.</string>
+    <string name="controls_editor_title">Editar controles</string>
+    <string name="controls_editor_move">Mover panel</string>
+    <string name="controls_editor_collapse">Plegar</string>
+    <string name="controls_editor_expand">Desplegar</string>
+    <string name="controls_editor_hint">Toca un botón para editarlo</string>
+    <string name="controls_editor_selected">Seleccionado: %1$s · %2$s</string>
+    <string name="controls_editor_dpad">Cruceta</string>
+    <string name="controls_editor_key">Tecla</string>
+    <string name="controls_editor_name">Nombre</string>
+    <string name="controls_editor_size">Tamaño</string>
+    <string name="controls_editor_size_value">Tamaño · %1$d%%</string>
+    <string name="controls_editor_delete">Eliminar</string>
+    <string name="controls_editor_delete_title">¿Eliminar el botón?</string>
+    <string name="controls_editor_delete_message">¿Quitar «%1$s» de este diseño? Pulsa Guardar para conservar el cambio.</string>
+    <string name="controls_show_fps">Mostrar FPS</string>
+    <string name="controls_editor_add">+ Botón</string>
+    <string name="controls_editor_restore">Restaurar</string>
+    <string name="controls_editor_cancel">Cancelar</string>
+    <string name="controls_editor_save">Guardar</string>
+    <string name="controls_editor_apply">Aplicar</string>
+    <string name="controls_editor_capture_key">Pulsar una tecla física…</string>
+    <string name="controls_editor_key_list">Lista de teclas</string>
+    <string name="controls_editor_physical_key">Tecla física</string>
+    <string name="controls_editor_press_key">Pulsa una tecla del teclado o del mando. Atrás cancela; usa la lista si el sistema intercepta una tecla.</string>
+    <string name="controls_editor_restore_title">¿Restaurar el diseño?</string>
+    <string name="controls_editor_restore_message">Carga el diseño del juego para esta orientación o el pad predeterminado. Pulsa Guardar para conservarlo o Cancelar para descartarlo.</string>
+    <string-array name="controls_editor_special_keys">
+        <item>Intro</item>
+        <item>Esc</item>
+        <item>Espacio</item>
+        <item>Mayús</item>
+        <item>Ctrl</item>
+        <item>Alt</item>
+        <item>Tabulador</item>
+        <item>Arriba</item>
+        <item>Abajo</item>
+        <item>Izquierda</item>
+        <item>Derecha</item>
+    </string-array>
+</resources>

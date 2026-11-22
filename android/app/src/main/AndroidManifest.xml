@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- MKXP-Z renders through the GLES 2 backend (gfx_backend=gles). -->
+    <uses-feature
+        android:glEsVersion="0x00020000"
+        android:required="true" />
+
+    <!-- Touch overlay and physical gamepads are optional. -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.gamepad"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
+
+    <!-- Controller rumble (SDL_GameControllerRumble). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Lets the save provider check the launcher's signature (package visibility). -->
+    <queries>
+        <package android:name="com.fangamelauncher.app" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:appCategory="game"
+        android:hardwareAccelerated="true"
+        android:icon="${launcherIcon}"
+        android:isGame="true"
+        android:label="${appLabel}"
+        android:theme="@style/GameTheme">
+
+        <meta-data
+            android:name="android.game_mode_config"
+            android:resource="@xml/game_mode_config" />
+
+        <!-- Splash: copies assets/game into private storage before SDL starts. -->
+        <activity
+            android:name=".SplashActivity"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:exported="true"
+            android:theme="@style/SplashTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- The game itself: SDLActivity + the MKXP-Z engine. -->
+        <activity
+            android:name=".MkxpActivity"
+            android:alwaysRetainTaskState="true"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:preferMinimalPostProcessing="true"
+            android:screenOrientation="sensorLandscape" />
+
+        <!-- Save access for the Fangame Launcher; every call is checked in code. -->
+        <provider
+            android:name=".LauncherSaveProvider"
+            android:authorities="${applicationId}.fangamelauncher"
+            android:exported="true" />
+    </application>
+
+</manifest>

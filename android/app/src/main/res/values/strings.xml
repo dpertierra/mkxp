@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="splash_installing">Installing game data…</string>
+    <string name="splash_installing_progress">Installing game data… (%1$d/%2$d)</string>
+    <string name="splash_error">Could not install the game data: %1$s</string>
+    <string name="splash_retry">Retry</string>
+    <string name="controls_menu_title">Controls</string>
+    <string name="controls_hide">Hide controls</string>
+    <string name="controls_reset">Restart game</string>
+    <string name="controls_reset_confirm">Tap again to restart (unsaved progress is lost)</string>
+    <string name="gamepad_title">Gamepad</string>
+    <string name="gamepad_hint">Press a gamepad button to highlight it. Tap a tile to change its key.</string>
+    <string name="gamepad_section_buttons">Buttons</string>
+    <string name="gamepad_section_triggers">Triggers</string>
+    <string name="gamepad_section_sticks">Sticks</string>
+    <string name="gamepad_section_menu">Menu</string>
+    <string name="gamepad_section_dpad">D-pad</string>
+    <string name="controls_keys_letters">Letters</string>
+    <string name="controls_keys_numbers">Numbers</string>
+    <string name="controls_keys_arrows">Arrows</string>
+    <string name="controls_keys_special">Special</string>
+    <string name="controls_keys_hint">Choose a key or enable physical key capture.</string>
+    <string name="controls_keys_capture">Press a key…</string>
+    <string name="controls_keys_for">Key · %1$s</string>
+    <string name="gamepad_binding">%1$s: %2$s</string>
+    <string name="gamepad_changed">Changed</string>
+    <string name="gamepad_unassigned">Unassigned</string>
+    <string name="gamepad_default">Default</string>
+    <string name="gamepad_restore_all">Restore all</string>
+    <string name="gamepad_restore_title">Restore all gamepad buttons?</string>
+    <string name="gamepad_restore_message">Reset every button to its default key. Tap Save to keep the changes, or Cancel to discard them.</string>
+    <string name="gamepad_key_c">C · Confirm</string>
+    <string name="gamepad_key_x">X · Back / Menu</string>
+    <string name="gamepad_key_z">Z · Action/Run</string>
+    <string name="gamepad_key_escape">Esc · Back / Menu</string>
+    <string name="gamepad_choose_key">%1$s: choose a key below or select Physical key to use your keyboard.</string>
+    <string name="gamepad_press_key">Press a key on your keyboard. Back cancels; use the list if the system intercepts a key.</string>
+    <string name="gamepad_save_error">Could not save the gamepad map. Your changes are still here; try Save again.</string>
+    <string name="controls_editor_title">Edit controls</string>
+    <string name="controls_editor_move">Move panel</string>
+    <string name="controls_editor_collapse">Collapse</string>
+    <string name="controls_editor_expand">Expand</string>
+    <string name="controls_editor_hint">Tap a button to edit it</string>
+    <string name="controls_editor_selected">Selected: %1$s · %2$s</string>
+    <string name="controls_editor_dpad">D-pad</string>
+    <string name="controls_editor_key">Key</string>
+    <string name="controls_editor_name">Label</string>
+    <string name="controls_editor_size">Size</string>
+    <string name="controls_editor_size_value">Size · %1$d%%</string>
+    <string name="controls_editor_delete">Delete</string>
+    <string name="controls_editor_delete_title">Delete button?</string>
+    <string name="controls_editor_delete_message">Remove “%1$s” from this layout? Tap Save to keep the change.</string>
+    <string name="controls_show_fps">Show FPS</string>
+    <string name="controls_editor_add">+ Button</string>
+    <string name="controls_editor_restore">Restore</string>
+    <string name="controls_editor_cancel">Cancel</string>
+    <string name="controls_editor_save">Save</string>
+    <string name="controls_editor_apply">Apply</string>
+    <string name="controls_editor_capture_key">Press a physical key…</string>
+    <string name="controls_editor_key_list">Key list</string>
+    <string name="controls_editor_physical_key">Physical key</string>
+    <string name="controls_editor_press_key">Press a key on your keyboard or controller. Back cancels; use the list if the system intercepts a key.</string>
+    <string name="controls_editor_restore_title">Restore layout?</string>
+    <string name="controls_editor_restore_message">Load the game’s layout for this orientation, or the default pad. Tap Save to keep it, or Cancel to discard it.</string>
+    <string-array name="controls_editor_special_keys">
+        <item>Enter</item>
+        <item>Esc</item>
+        <item>Space</item>
+        <item>Shift</item>
+        <item>Ctrl</item>
+        <item>Alt</item>
+        <item>Tab</item>
+        <item>Up</item>
+        <item>Down</item>
+        <item>Left</item>
+        <item>Right</item>
+    </string-array>
+</resources>

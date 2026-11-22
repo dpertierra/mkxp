@@ -219,6 +219,15 @@ int main(int argc, char *argv[]) {
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
 
+#ifdef __ANDROID__
+    SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "1");
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+
+    // Set by MkxpActivity to the directory the launcher installed the game into.
+    if (const char *gameDir = getenv("MKXPZ_GAME_DIR"))
+        mkxp_fs::setCurrentDirectory(gameDir);
+#endif
+
 #ifdef GLES2_HEADER
     SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
 #endif
@@ -238,7 +247,7 @@ int main(int argc, char *argv[]) {
 
 #ifndef WORKDIR_CURRENT
     char dataDir[512]{};
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
     char *tmp{};
     tmp = getenv("SRCDIR");
     if (tmp) {
@@ -339,9 +348,14 @@ int main(int argc, char *argv[]) {
 
     if (conf.winResizable)
       winFlags |= SDL_WINDOW_RESIZABLE;
+#ifdef __ANDROID__
+    // Android apps always own the whole screen.
+    winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#else
     if (conf.fullscreen)
       winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    
+#endif
+
 #ifdef GLES2_HEADER
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);

@@ -38,6 +38,7 @@
 		3B10ECE32568E83D00372D13 /* simpleMatrix.vert in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3B10EC902568E7B500372D13 /* simpleMatrix.vert */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		3B10ECE42568E83D00372D13 /* sprite.frag in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3B10EC972568E7B500372D13 /* sprite.frag */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		3B10ECE52568E83D00372D13 /* sprite.vert in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3B10EC982568E7B500372D13 /* sprite.vert */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		A125D0012F1A000100000001 /* sprite25d.vert in CopyFiles */ = {isa = PBXBuildFile; fileRef = A125D0012F1A000100000002 /* sprite25d.vert */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		3B10ECE62568E83D00372D13 /* tilemap.frag in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3B10EC952568E7B500372D13 /* tilemap.frag */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		3B10ECE72568E83D00372D13 /* tilemap.vert in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3B10ECA02568E7B600372D13 /* tilemap.vert */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		3B10ECE82568E83D00372D13 /* tilemapvx.vert in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3B10EC962568E7B500372D13 /* tilemapvx.vert */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -779,6 +780,7 @@
 				FE52041C2A08E62F0070038A /* lanczos3.frag in CopyFiles */,
 				3B10ECE42568E83D00372D13 /* sprite.frag in CopyFiles */,
 				3B10ECE52568E83D00372D13 /* sprite.vert in CopyFiles */,
+				A125D0012F1A000100000001 /* sprite25d.vert in CopyFiles */,
 				3B10ECE62568E83D00372D13 /* tilemap.frag in CopyFiles */,
 				3B10ECE72568E83D00372D13 /* tilemap.vert in CopyFiles */,
 				3B10ECE82568E83D00372D13 /* tilemapvx.vert in CopyFiles */,
@@ -891,6 +893,7 @@
 		3B10EC962568E7B500372D13 /* tilemapvx.vert */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = tilemapvx.vert; path = ../shader/tilemapvx.vert; sourceTree = "<group>"; };
 		3B10EC972568E7B500372D13 /* sprite.frag */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = sprite.frag; path = ../shader/sprite.frag; sourceTree = "<group>"; };
 		3B10EC982568E7B500372D13 /* sprite.vert */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = sprite.vert; path = ../shader/sprite.vert; sourceTree = "<group>"; };
+		A125D0012F1A000100000002 /* sprite25d.vert */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = sprite25d.vert; path = ../shader/sprite25d.vert; sourceTree = "<group>"; };
 		3B10EC992568E7B500372D13 /* simple.frag */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = simple.frag; path = ../shader/simple.frag; sourceTree = "<group>"; };
 		3B10EC9A2568E7B500372D13 /* blurV.vert */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = blurV.vert; path = ../shader/blurV.vert; sourceTree = "<group>"; };
 		3B10EC9B2568E7B500372D13 /* blur.frag */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.glsl; name = blur.frag; path = ../shader/blur.frag; sourceTree = "<group>"; };
@@ -1435,6 +1438,7 @@
 				3B10ECA52568E7B600372D13 /* simpleColor.vert */,
 				3B10EC902568E7B500372D13 /* simpleMatrix.vert */,
 				3B10EC982568E7B500372D13 /* sprite.vert */,
+				A125D0012F1A000100000002 /* sprite25d.vert */,
 				3B10ECA02568E7B600372D13 /* tilemap.vert */,
 				3B10EC962568E7B500372D13 /* tilemapvx.vert */,
 				3B10ECA62568E7B600372D13 /* kglCompressAlpha.frag */,

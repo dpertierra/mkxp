@@ -26,18 +26,52 @@
 #include "flashable.h"
 #include "disposable.h"
 #include "util.h"
+#include <array>
+#include <stdint.h>
+
+static const int PERSPECTIVE_SAMPLES = 64;
+static const int PERSPECTIVE_MAX_SEGMENTS = 4;
+
+struct PerspectiveSegment
+{
+	float yStart, yStep;
+	int firstIndex, count;
+};
+
+struct PerspectiveTable
+{
+	std::array<Vec4, PERSPECTIVE_SAMPLES> samples;
+	std::array<PerspectiveSegment, PERSPECTIVE_MAX_SEGMENTS> segments;
+	int segmentCount;
+	float centerX;
+	bool enabled;
+	unsigned int generation;
+	uint64_t identity;
+
+	PerspectiveTable() : segmentCount(0), centerX(0), enabled(false), generation(0), identity(0)
+	{
+		for (int i = 0; i < PERSPECTIVE_SAMPLES; ++i)
+			samples[i] = Vec4(0, 1, 1, 0);
+	}
+};
 
 struct ViewportPrivate;
 
 class Viewport : public Scene, public SceneElement, public Flashable, public Disposable
 {
 public:
+	using Disposable::guardDisposed;
+
 	Viewport(int x, int y, int width, int height);
 	Viewport(Rect *rect);
 	Viewport();
 	~Viewport();
 
 	void update();
+	const PerspectiveTable &perspectiveTable() const;
+	void setPerspective(const PerspectiveSegment *segments, int segmentCount, const float *values);
+	void clearPerspective();
+	void setPerspectiveCenterX(float value);
 
 	DECL_ATTR( Rect,  Rect&  )
 	DECL_ATTR( OX,    int    )
@@ -62,6 +96,7 @@ private:
 	ABOUT_TO_ACCESS_DISP
 
 	ViewportPrivate *p;
+	PerspectiveTable m_perspective;
 	friend struct ViewportPrivate;
 
 	IntruListLink<Scene> sceneLink;

@@ -1,4 +1,5 @@
-# Build manual de los tres ejecutables que distribuye La Base de Sky.
+# Build manual de los ejecutables que distribuye La Base de Sky y del APK base
+# de Android.
 #
 # A diferencia de autobuild.yml, que solo dispara en las ramas 'dev' y
 # 'autobuild', esta se lanza a mano desde cualquier rama:
@@ -24,6 +25,10 @@ on:
         description: 'Construir macOS (Z-universal.app.zip)'
         type: boolean
         default: true
+      android:
+        description: 'Construir Android (APK base para crear_release.rb)'
+        type: boolean
+        default: true
 
 jobs:
   build-windows:
@@ -36,9 +41,10 @@ jobs:
         with:
           length: 7
 
-      - name: Sanitize ref name for artifact
+      # Nombre de rama apto para artefactos: upload-artifact rechaza '/'.
+      - id: ref
         shell: bash
-        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Disable Defender real-time scanning
         # Real-time scanning of every compiler output makes msys2 builds crawl on hosted runners.
@@ -50,6 +56,7 @@ jobs:
           msystem: ucrt64
           install: >-
             base-devel
+            bison
             git
             ruby
             vim
@@ -117,10 +124,19 @@ jobs:
           cp ../../mkxp.json .
           cp -r ../../scripts .
           cp ../../assets/LICENSE.mkxp-z-with-https.txt .
+          # Copy every MSYS2 DLL the binaries link against (zlib is libz-1.dll on current MSYS2)
+          for _ in 1 2 3
+          do
+            ldd *.exe *.dll | sed -n 's/.*=> \(.*\) (0x.*/\1/p' | sort -u | while read -r dll
+            do
+              dll="$(cygpath -u "$dll")"
+              case "$dll" in */ucrt64/bin/*) cp -n "$dll" . ;; esac
+            done
+          done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.windows.${{env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.windows.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/artifact
 
   build-linux:
@@ -133,9 +149,10 @@ jobs:
         with:
           length: 7
 
-      - name: Sanitize ref name for artifact
+      # Nombre de rama apto para artefactos: upload-artifact rechaza '/'.
+      - id: ref
         shell: bash
-        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -184,7 +201,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.linux.ubuntu.22.04.x86_64.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/local
 
   build-macos:
@@ -197,9 +214,10 @@ jobs:
         with:
           length: 7
 
-      - name: Sanitize ref name for artifact
+      # Nombre de rama apto para artefactos: upload-artifact rechaza '/'.
+      - id: ref
         shell: bash
-        run: echo "REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Remove pre-existing homebrew packages
         run: brew remove --force $(brew list)
@@ -240,5 +258,10 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: mkxp-z.macos.${{env.REF_NAME}}-${{steps.short-sha.outputs.sha}}
+          name: mkxp-z.macos.${{steps.ref.outputs.name}}-${{steps.short-sha.outputs.sha}}
           path: build/Build/Products/Release/Z-universal.app.zip
+
+  build-android-base:
+    name: Android
+    if: ${{ inputs.android }}
+    uses: ./.github/workflows/build-android-base.yml

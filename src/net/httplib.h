@@ -261,6 +261,9 @@ using socket_t = int;
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
+#ifdef __ANDROID__
+#include <dirent.h>
+#endif
 
 #if defined(_WIN32) && defined(OPENSSL_USE_APPLINK)
 #include <openssl/applink.c>
@@ -8524,6 +8527,30 @@ inline bool SSLClient::load_certs() {
 #ifdef _WIN32
       loaded =
           detail::load_system_certs_on_windows(SSL_CTX_get_cert_store(ctx_));
+#elif defined(__ANDROID__)
+      const char *directory = "/apex/com.android.conscrypt/cacerts";
+      DIR *certs = opendir(directory);
+      if (!certs) {
+        directory = "/system/etc/security/cacerts";
+        certs = opendir(directory);
+      }
+      if (certs) {
+        while (auto entry = readdir(certs)) {
+          if (entry->d_name[0] == '.') continue;
+          auto path = std::string(directory) + "/" + entry->d_name;
+          BIO *file = BIO_new_file(path.c_str(), "r");
+          if (!file) continue;
+          X509 *cert = PEM_read_bio_X509(file, nullptr, nullptr, nullptr);
+          if (cert) {
+            if (X509_STORE_add_cert(SSL_CTX_get_cert_store(ctx_), cert) == 1)
+              loaded = true;
+            X509_free(cert);
+          }
+          BIO_free(file);
+        }
+        closedir(certs);
+        ERR_clear_error();
+      }
 #elif defined(CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN) && defined(__APPLE__)
 #if TARGET_OS_OSX
       loaded = detail::load_system_certs_on_macos(SSL_CTX_get_cert_store(ctx_));

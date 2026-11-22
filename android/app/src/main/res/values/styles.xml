@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fullscreen, no title bar: the game owns the whole screen. -->
+    <style name="GameTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorAccent">#FFC850</item>
+        <item name="android:colorControlActivated">#FFC850</item>
+        <item name="android:colorControlNormal">#C6CBD5</item>
+        <item name="android:textColorPrimary">#F4F4F6</item>
+        <item name="android:textColorSecondary">#C6CBD5</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+
+    <!-- Shown while the game data is installed. -->
+    <style name="SplashTheme" parent="@android:style/Theme.NoTitleBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

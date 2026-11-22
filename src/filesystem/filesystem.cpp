@@ -33,6 +33,11 @@
 
 #include <physfs.h>
 
+#ifdef __ANDROID__
+#include <SDL_system.h>
+#include <jni.h>
+#endif
+
 #include <algorithm>
 #include <stack>
 #include <stdio.h>
@@ -278,6 +283,9 @@ struct FileSystemPrivate {
   /* This is for compatibility with games that take Windows'
    * case insensitivity for granted */
   bool havePathCache;
+#ifdef __ANDROID__
+  bool haveApk = false;
+#endif
 };
 
 static void throwPhysfsError(const char *desc) {
@@ -295,7 +303,16 @@ static void throwPhysfsError(const char *desc) {
 }
 
 FileSystem::FileSystem(const char *argv0, bool allowSymlinks) {
+#ifdef __ANDROID__
+  // PhysFS on Android reads argv0 as a PHYSFS_AndroidInit*, not a path.
+  PHYSFS_AndroidInit ainit = {SDL_AndroidGetJNIEnv(), SDL_AndroidGetActivity()};
+  int inited = PHYSFS_init((const char *)&ainit);
+  JNIEnv *env = (JNIEnv *)ainit.jnienv;
+  env->DeleteLocalRef((jobject)ainit.context);
+  if (inited == 0)
+#else
   if (PHYSFS_init(argv0) == 0)
+#endif
     throwPhysfsError("Error initializing PhysFS");
 
   /* One error (=return 0) turns the whole product to 0 */
@@ -351,6 +368,61 @@ void FileSystem::removePath(const char *path, bool reload) {
     
     if (reload) reloadPathCache();
 }
+
+#ifdef __ANDROID__
+void FileSystem::addApk(const char *path) {
+  if (!path || !*path) return;
+  if (!PHYSFS_mount(path, 0, 1))
+    throwPhysfsError("Error mounting game APK");
+  if (!PHYSFS_setRoot(path, "assets/game")) {
+    PHYSFS_ErrorCode error = PHYSFS_getLastErrorCode();
+    PHYSFS_unmount(path);
+    throw Exception(Exception::PHYSFSError, "Error setting game APK root: %s",
+                    PHYSFS_getErrorByCode(error));
+  }
+  p->haveApk = true;
+}
+
+bool FileSystem::hasApk() const {
+  return p->haveApk;
+}
+
+std::string FileSystem::apkLookup(const char *path) {
+  std::string normalized = normalize(path, false, false);
+  if (normalized == ".") normalized.clear();
+  if (PHYSFS_exists(normalized.c_str())) return normalized;
+  std::string cached = desensitize(normalized.c_str());
+  if (p->havePathCache) return cached;
+  if (PHYSFS_exists(cached.c_str())) return cached;
+
+  // With the cache disabled, resolve case-insensitive components by enumeration.
+  std::string resolved;
+  size_t start = 0;
+  while (start < normalized.size()) {
+    size_t end = normalized.find('/', start);
+    std::string component = normalized.substr(start, end - start);
+    if (component.empty() || component == "." || component == "..") return normalized;
+    char **entries = PHYSFS_enumerateFiles(resolved.c_str());
+    bool found = false;
+    if (entries) {
+      for (char **entry = entries; *entry; ++entry) {
+        if (SDL_strcasecmp(*entry, component.c_str()) == 0) {
+          component = *entry;
+          found = true;
+          break;
+        }
+      }
+      PHYSFS_freeList(entries);
+    }
+    if (!found) return normalized;
+    if (!resolved.empty()) resolved += '/';
+    resolved += component;
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return resolved;
+}
+#endif
 
 struct CacheEnumData {
   FileSystemPrivate *p;
@@ -428,6 +500,9 @@ static PHYSFS_EnumerateCallbackResult cacheEnumCB(void *d, const char *origdir,
   PHYSFS_stat(fullPath, &stat);
 
   if (stat.filetype == PHYSFS_FILETYPE_DIRECTORY) {
+#ifdef __ANDROID__
+    data.p->pathCache.insert(lowerCase, mixedCase);
+#endif
     /* Create a new list for this directory */
     std::vector<std::string> &list = data.p->fileLists[lowerCase];
 
