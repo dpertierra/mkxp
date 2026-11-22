@@ -168,6 +168,18 @@ struct Config {
         std::string r;
     } kbActionNames;
     
+    // Extra remappable actions. Declared in mkxp.json "customActions".
+    struct CustomAction {
+        std::string id;     // Ruby constant name: Input::<ID>
+        std::string name;   // Label shown in the F1 menu
+        std::string key;    // Optional default key (SDL name, e.g. "TAB")
+        std::string button; // Optional default pad button (e.g. "LEFTSTICK")
+    };
+    std::vector<CustomAction> customActions;
+    
+    // Built-in modifier/function keys made remappable ("ALT", "CTRL", ...)
+    std::vector<std::string> remappableKeys;
+    
     std::string userConfPath;
     
     /* Internal */

@@ -32,11 +32,9 @@
 
 #import "assert.h"
 
-static const int inputMapRowToCode[] {
-    Input::Down, Input::Left, Input::Right, Input::Up,
-    Input::A, Input:: B, Input::C, Input::X, Input::Y, Input::Z,
-    Input::L, Input::R
-};
+// Rows of the table: the 12 base actions, then the extra actions
+// (remappable keys + "customActions"), filled in initDelegateWithTable.
+static std::vector<int> inputMapRowToCode;
 
 typedef NSMutableArray<NSNumber*> BindingIndexArray;
 
@@ -267,6 +265,12 @@ s.d.ca.dir = (axis.value >= 0) ? AxisDir::Positive : AxisDir::Negative;
     
     RGSSThreadData &data = shState->rtData();
     
+    inputMapRowToCode = {
+        Input::Down, Input::Left, Input::Right, Input::Up,
+        Input::A, Input::B, Input::C, Input::X, Input::Y, Input::Z,
+        Input::L, Input::R
+    };
+    
 #define SET_BINDING(code) bindingNames[@(Input::code)] = @(#code)
 #define SET_BINDING_CUSTOM(code, value) bindingNames[@(Input::code)] = @(value)
     SET_BINDING(Down);
@@ -294,6 +298,11 @@ if (!data.config.kbActionNames.value.empty()) bindingNames[@(Input::code)] = \
     SET_BINDING_CONF(L,l);
     SET_BINDING_CONF(R,r);
     
+    for (const ExtraAction &a : extraActions(data.config)) {
+        inputMapRowToCode.push_back(a.code);
+        bindingNames[@(a.code)] = @(a.name.c_str());
+    }
+    
     BDescVec oldBinds;
     data.bindingUpdateMsg.get(oldBinds);
     
@@ -314,7 +323,7 @@ if (!data.config.kbActionNames.value.empty()) bindingNames[@(Input::code)] = \
 - (void) loadBinds {
     [nsbinds removeAllObjects];
     
-    for (int i = 0; i < sizeof(inputMapRowToCode) / sizeof(Input::ButtonCode); i++)
+    for (size_t i = 0; i < inputMapRowToCode.size(); i++)
         nsbinds[@(inputMapRowToCode[i])] = [NSMutableArray new];
     
     for (int i = 0; i < binds->size(); i++) {
@@ -328,7 +337,7 @@ if (!data.config.kbActionNames.value.empty()) bindingNames[@(Input::code)] = \
 }
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
-    return nsbinds.count;
+    return inputMapRowToCode.size();
 }
 
 - (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {

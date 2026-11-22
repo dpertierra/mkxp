@@ -22,6 +22,7 @@
 #include <cmath>
 #include <SDL_joystick.h>
 #include <string>
+#include <vector>
 
 
 #include "eventthread.h"
@@ -29,6 +30,8 @@
 #include "binding-util.h"
 #include "util/exception.h"
 #include "input/input.h"
+#include "input/keybindings.h"
+#include "config.h"
 #include "sharedstate.h"
 #include "src/util/util.h"
 
@@ -647,12 +650,21 @@ void inputBindingInit() {
     _rb_define_module_function(module, "clipboard", inputGetClipboard);
     _rb_define_module_function(module, "clipboard=", inputSetClipboard);
     
+    /* Engine button codes plus the game's "customActions" (Input::<ID>) */
+    std::vector<std::pair<std::string, int>> codes;
+    for (size_t i = 0; i < buttonCodesN; ++i)
+        codes.push_back({buttonCodes[i].str, buttonCodes[i].val});
+    
+    for (const ExtraAction &a : extraActions(shState->config()))
+        if (!a.builtin)
+            codes.push_back({a.id, a.code});
+    
     if (rgssVer >= 3) {
         VALUE symHash = rb_hash_new();
         
-        for (size_t i = 0; i < buttonCodesN; ++i) {
-            ID sym = rb_intern(buttonCodes[i].str);
-            VALUE val = INT2FIX(buttonCodes[i].val);
+        for (const auto &bc : codes) {
+            ID sym = rb_intern(bc.first.c_str());
+            VALUE val = INT2FIX(bc.second);
             
             /* In RGSS3 all Input::XYZ constants are equal to :XYZ symbols,
              * to be compatible with the previous convention */
@@ -663,9 +675,9 @@ void inputBindingInit() {
         rb_iv_set(module, "buttoncodes", symHash);
         getRbData()->buttoncodeHash = symHash;
     } else {
-        for (size_t i = 0; i < buttonCodesN; ++i) {
-            ID sym = rb_intern(buttonCodes[i].str);
-            VALUE val = INT2FIX(buttonCodes[i].val);
+        for (const auto &bc : codes) {
+            ID sym = rb_intern(bc.first.c_str());
+            VALUE val = INT2FIX(bc.second);
             
             rb_const_set(module, sym, val);
         }

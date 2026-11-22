@@ -28,6 +28,7 @@
 #include <SDL_gamecontroller.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string>
 #include <vector>
 
 enum AxisDir
@@ -100,6 +101,19 @@ struct BindingDesc
 
 typedef std::vector<BindingDesc> BDescVec;
 struct Config;
+
+/* Actions beyond the 12 base ones: built-in keys made remappable
+ * ("remappableKeys") followed by game-defined "customActions". */
+struct ExtraAction
+{
+	std::string id;
+	std::string name;
+	Input::ButtonCode code;
+	bool builtin;
+	std::string key, button; /* custom defaults only */
+};
+
+std::vector<ExtraAction> extraActions(const Config &conf);
 
 BDescVec genDefaultBindings(const Config &conf);
 

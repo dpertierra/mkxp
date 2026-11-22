@@ -38,7 +38,9 @@
 #include <string.h>
 #include <assert.h>
 
-#define BUTTON_CODE_COUNT 26
+/* 26 standard/extension states + one per custom action */
+#define CUSTOM_STATE_BASE 26
+#define BUTTON_CODE_COUNT (CUSTOM_STATE_BASE + Input::CustomMax - Input::CustomBase + 1)
 
 #define m(vk,sc) { vk, SDL_SCANCODE_##sc }
 std::unordered_map<int, int> vKeyToScancode{
@@ -643,6 +645,17 @@ static const int mapToIndex[] =
 
 static elementsN(mapToIndex);
 
+static inline int stateIndex(int code)
+{
+    if (code >= Input::CustomBase && code <= Input::CustomMax)
+        return CUSTOM_STATE_BASE + code - Input::CustomBase;
+    
+    if (code < 0 || (size_t) code >= mapToIndexN)
+        return 0;
+    
+    return mapToIndex[code];
+}
+
 static const Input::ButtonCode dirs[] =
 { Input::Down, Input::Left, Input::Right, Input::Up };
 
@@ -757,7 +770,7 @@ struct InputPrivate
     {
         last_update = 0;
         
-        initStaticKbBindings();
+        initStaticKbBindings(rtData.config);
         initMsBindings();
         
         /* Main thread should have these posted by now */
@@ -794,24 +807,17 @@ struct InputPrivate
     
     inline ButtonState &getStateCheck(int code)
     {
-        int index;
-        
-        if (code < 0 || (size_t) code > mapToIndexN-1)
-            index = 0;
-        else
-            index = mapToIndex[code];
-        
-        return states[index];
+        return states[stateIndex(code)];
     }
     
     inline ButtonState &getState(Input::ButtonCode code)
     {
-        return states[mapToIndex[code]];
+        return states[stateIndex(code)];
     }
     
     inline ButtonState &getOldState(Input::ButtonCode code)
     {
-        return statesOld[mapToIndex[code]];
+        return statesOld[stateIndex(code)];
     }
     
     ButtonState getStateRaw(int code, bool useVKey)
@@ -982,12 +988,22 @@ struct InputPrivate
         appendBindings(ctrlBBindings);
     }
     
-    void initStaticKbBindings()
+    void initStaticKbBindings(const Config &conf)
     {
         kbStatBindings.clear();
         
+        /* Keys made remappable are bound through the binding file instead */
+        const std::vector<ExtraAction> extras = extraActions(conf);
+        
         for (size_t i = 0; i < staticKbBindingsN; ++i)
-            kbStatBindings.push_back(KbBinding(staticKbBindings[i]));
+        {
+            bool remappable = false;
+            for (const ExtraAction &a : extras)
+                remappable = remappable || a.code == staticKbBindings[i].target;
+            
+            if (!remappable)
+                kbStatBindings.push_back(KbBinding(staticKbBindings[i]));
+        }
     }
     
     void initMsBindings()

@@ -573,6 +573,26 @@
     //  "x": ...,
     // },
 
+    // Extra remappable actions, shown in the F1 menu after the base ones
+    // (up to 32). Each "id" becomes the Ruby constant Input::<ID> (letters,
+    // digits and underscores, starting with a letter), usable with
+    // Input.press? / trigger? / repeat?. "key" (SDL scancode name, e.g.
+    // "TAB") and "button" (SDL controller button, e.g. "LEFTSTICK") are
+    // optional defaults. Saved bindings are matched by id, so the order of
+    // this list can change freely.
+    //
+    // "customActions": [
+    //   { "id": "TURBO", "name": "Turbo", "key": "TAB", "button": "BACK" },
+    //   { "id": "QUICK_MAP", "name": "Quick map" }
+    // ],
+
+    // Built-in keys that are fixed by default and can be listed here to
+    // make them remappable in the F1 menu (and bindable to controller
+    // buttons): "SHIFT", "CTRL", "ALT", "F5".."F9". Their Ruby constants
+    // (Input::ALT, ...) keep working.
+    //
+    // "remappableKeys": ["ALT", "SHIFT", "CTRL"],
+
 
     // Dump tile atlas (for debugging purposes)
     // (default: false)

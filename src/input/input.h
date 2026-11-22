@@ -53,7 +53,10 @@ public:
 
 		/* Non-standard extensions */
 		MouseLeft = 38, MouseMiddle = 39, MouseRight = 40,
-        MouseX1 = 41, MouseX2 = 42
+        MouseX1 = 41, MouseX2 = 42,
+
+		/* Game-defined actions, declared in mkxp.json "customActions" */
+		CustomBase = 64, CustomMax = 95
 	};
     
     void recalcRepeat(unsigned int fps);

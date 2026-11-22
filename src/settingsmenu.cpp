@@ -79,6 +79,17 @@ struct VButton
 
 static elementsN(vButtons);
 
+/* One entry per action shown in the menu: the 12 base ones, then the
+ * remappable built-in keys and the game's custom actions */
+struct MenuButton
+{
+	Input::ButtonCode code;
+	std::string str;
+};
+
+/* Actions per page: 3 columns x 4 rows */
+const size_t pageSize = 12;
+
 /* Human readable string representation */
 std::string sourceDescString(const SourceDesc &src)
 {
@@ -145,16 +156,16 @@ protected:
 
 struct BindingWidget : Widget
 {
-	VButton vb;
+	MenuButton vb;
 	/* Source slots */
 	SourceDesc src[4];
 	/* Flag indicating whether a slot source is used
 	 * for multiple button targets (red indicator) */
 	bool dupFlag[4];
 
-	BindingWidget(int vbIndex, SMP *p, const IntRect &rect)
+	BindingWidget(const MenuButton &vb, SMP *p, const IntRect &rect)
 	    : Widget(p, rect),
-	      vb(vButtons[vbIndex]),
+	      vb(vb),
 	      hoveredCell(-1)
 	{
         
@@ -270,6 +281,12 @@ struct SettingsMenuPrivate
 	Label dupWarnLabel;
 	std::vector<Widget*> widgets;
 	Widget *hovered;
+
+	/* Paging: only the binding widgets of the current page are in `widgets` */
+	size_t page, pageCount;
+	char pageStr[32];
+	Label pageLabel;
+	size_t firstButton; /* index in `buttons` of the page buttons, if any */
 
 	SourceDesc *captureDesc;
 	const char *captureName;
@@ -434,7 +451,7 @@ struct SettingsMenuPrivate
 
 	void setupBindingData(const BDescVec &d)
 	{
-		size_t slotI[vButtonsN] = { 0 };
+		std::vector<size_t> slotI(bWidgets.size(), 0);
 
 		for (size_t i = 0; i < bWidgets.size(); ++i)
 			for (size_t j = 0; j < 4; ++j)
@@ -446,11 +463,13 @@ struct SettingsMenuPrivate
 			const Input::ButtonCode trg = desc.target;
 
 			size_t j;
-			for (j = 0; j < vButtonsN; ++j)
+			for (j = 0; j < bWidgets.size(); ++j)
 				if (bWidgets[j].vb.code == trg)
 					break;
 
-			assert(j < vButtonsN);
+			/* Binding for an action that is not listed */
+			if (j == bWidgets.size())
+				continue;
 
 			size_t &slot = slotI[j];
 			BindingWidget &w = bWidgets[j];
@@ -666,6 +685,48 @@ struct SettingsMenuPrivate
 		redraw();
 	}
 
+	void setPage(size_t newPage)
+	{
+		page = newPage;
+
+		if (hovered)
+		{
+			hovered->leave();
+			hovered = 0;
+		}
+
+		widgets.clear();
+
+		for (size_t i = page*pageSize; i < bWidgets.size() && i < (page+1)*pageSize; ++i)
+			widgets.push_back(&bWidgets[i]);
+
+		for (size_t i = 0; i < buttons.size(); ++i)
+			widgets.push_back(&buttons[i]);
+
+		widgets.push_back(&infoLabel);
+		widgets.push_back(&dupWarnLabel);
+
+		if (pageCount > 1)
+		{
+			snprintf(pageStr, sizeof(pageStr), "Page %zu/%zu", page+1, pageCount);
+			widgets.push_back(&pageLabel);
+		}
+
+		redraw();
+	}
+
+	void onPrevPage()
+	{
+		if (state == Idle && page > 0)
+			setPage(page-1);
+	}
+
+	void onNextPage()
+	{
+		if (state == Idle && page+1 < pageCount)
+			setPage(page+1);
+	}
+
 	void onResetToDefault()
 	{
 		setupBindingData(genDefaultBindings(rtData.config));
@@ -761,7 +822,7 @@ void BindingWidget::drawHandler(SDL_Surface *surf)
 	p->strokeRectInner(surf, cLine, 0, 0, rect.w, rect.h, 2);
 
 	/* Virtual button name */
-	p->drawText(surf, vb.str, 1, rect.h/2, cellOffX, Center, true);
+	p->drawText(surf, vb.str.c_str(), 1, rect.h/2, cellOffX, Center, true);
 
 	/* Cell frames */
 	p->strokeLineV(surf, cLine, cellOffX, 0, rect.h, 2);
@@ -816,7 +877,7 @@ void BindingWidget::clickHandler(int x, int y, uint8_t button)
 	if (cell == -1)
 		return;
 
-	p->onBWidgetCellClicked(src[cell], vb.str, button);
+	p->onBWidgetCellClicked(src[cell], vb.str.c_str(), button);
 }
 
 int BindingWidget::cellIndex(int x, int y) const
@@ -911,7 +972,8 @@ void Label::drawHandler(SDL_Surface *surf)
 
 SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 {
-    // Set names to be shown in the menu
+    // Names shown in the menu: base actions first, then the extra ones
+    std::vector<MenuButton> menuButtons;
     {
 #define SET_BUTTON_NAME(n, b) vButtons[n].str = rtData.config.kbActionNames.b.c_str();
         SET_BUTTON_NAME(2, l);
@@ -923,6 +985,12 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
         SET_BUTTON_NAME(10, y);
         SET_BUTTON_NAME(11, z);
 #undef SET_BUTTON_NAME
+        
+        for (size_t i = 0; i < vButtonsN; ++i)
+            menuButtons.push_back({ vButtons[i].code, vButtons[i].str });
+        
+        for (const ExtraAction &a : extraActions(rtData.config))
+            menuButtons.push_back({ a.code, a.name });
     }
     
 	p = new SettingsMenuPrivate(rtData);
@@ -943,23 +1011,23 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 
 	const size_t layoutW = 4;
 	const size_t layoutH = 3;
-	assert(layoutW*layoutH == vButtonsN);
+	assert(layoutW*layoutH == pageSize);
 
 	const int bWidgetW = winSize.x / layoutH;
 	const int bWidgetH = 64;
 	const int bWidgetY = winSize.y - layoutW*bWidgetH - 48;
 
-	for (int y = 0; y < 4; ++y)
-		for (int x = 0; x < 3; ++x)
-		{
-			int i = y*3+x;
-			BindingWidget w(i, p, IntRect(x*bWidgetW, bWidgetY+y*bWidgetH,
-			                              bWidgetW, bWidgetH));
-			p->bWidgets.push_back(w);
-		}
+	/* Widget i sits in slot i % pageSize of its page */
+	for (size_t i = 0; i < menuButtons.size(); ++i)
+	{
+		const int x = (i % pageSize) % layoutH;
+		const int y = (i % pageSize) / layoutH;
+		BindingWidget w(menuButtons[i], p, IntRect(x*bWidgetW, bWidgetY+y*bWidgetH,
+		                                           bWidgetW, bWidgetH));
+		p->bWidgets.push_back(w);
+	}
 
-	for (size_t i = 0; i< p->bWidgets.size(); ++i)
-		p->widgets.push_back(&p->bWidgets[i]);
+	p->pageCount = (menuButtons.size() + pageSize - 1) / pageSize;
 
 	BDescVec binds;
 	rtData.bindingUpdateMsg.get(binds);
@@ -980,18 +1048,20 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	p->buttons.push_back(Button(p, btRects[1], "Cancel", &SMP::onCancel));
 	p->buttons.push_back(Button(p, btRects[2], "Accept", &SMP::onAccept));
 
-	for (size_t i = 0; i< p->buttons.size(); ++i)
-		p->widgets.push_back(&p->buttons[i]);
+	if (p->pageCount > 1)
+	{
+		const int cx = winSize.x / 2;
+		p->buttons.push_back(Button(p, IntRect(cx-120, buttonY, 72, buttonH), "< Prev", &SMP::onPrevPage));
+		p->buttons.push_back(Button(p, IntRect(cx+48, buttonY, 72, buttonH), "Next >", &SMP::onNextPage));
+		p->pageLabel = Label(p, IntRect(cx-40, buttonY, 88, buttonH), p->pageStr, cText, cText, cText);
+	}
 
 	/* Labels */
-	const char *info = "Use left click to bind a slot, right click to clear its binding";
+	const char *info = "Left click: bind a slot. Right click: clear it. Mouse wheel: change page";
 	p->infoLabel = Label(p, IntRect(16, 6, winSize.x, 16), info, cText, cText, cText);
 
 	const char *warn = "Warning: Same physical key bound to multiple slots";
 	p->dupWarnLabel = Label(p, IntRect(16, 26, winSize.x, 16), warn, 255, 0, 0);
-
-	p->widgets.push_back(&p->infoLabel);
-	p->widgets.push_back(&p->dupWarnLabel);
 
 	p->hovered = 0;
 	p->captureDesc = 0;
@@ -999,7 +1069,7 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 
 	p->updateDuplicateStatus();
 
-	p->redraw();
+	p->setPage(0);
 }
 
 SettingsMenu::~SettingsMenu()
@@ -1019,6 +1089,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	case SDL_MOUSEBUTTONDOWN :
 	case SDL_MOUSEBUTTONUP :
 	case SDL_MOUSEMOTION :
+	case SDL_MOUSEWHEEL :
 	case SDL_KEYDOWN :
 	case SDL_KEYUP :
 		/* We can do this because windowID has the same
@@ -1079,6 +1150,13 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 
 	case SDL_MOUSEMOTION:
 		p->onMotion(event.motion);
+		return true;
+
+	case SDL_MOUSEWHEEL:
+		if (event.wheel.y > 0)
+			p->onPrevPage();
+		else if (event.wheel.y < 0)
+			p->onNextPage();
 		return true;
 
 	case SDL_KEYDOWN:
