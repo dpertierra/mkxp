@@ -48,7 +48,7 @@ foreach file : embedded_shaders_f
         input: file,
         output: '@0@.xxd'.format(embedded_shaders[count]),
         command: [
-            xxd, '-i', '-n', '___shader_' + embedded_shaders[count].replace('.', '_'), '@INPUT@'
+            xxd, '___shader_' + embedded_shaders[count].replace('.', '_'), '@INPUT@'
         ],
         capture: true,
         depend_files: embedded_shaders_f[count]

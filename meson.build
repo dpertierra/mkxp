@@ -6,7 +6,8 @@ if host_system == 'darwin'
     error('\nThis Meson project no longer supports macOS. Please use the Xcode project instead.')
 endif
 
-xxd = find_program('xxd', native: true)
+# Embeds files as C arrays (xxd -i -n equivalent, see scripts/xxd_i.py)
+xxd = [import('python').find_installation(), files('scripts/xxd_i.py')]
 
 git_hash = run_command('git', 'rev-parse', '--short', 'HEAD').stdout().strip()
 

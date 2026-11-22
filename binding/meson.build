@@ -64,6 +64,6 @@ if host_system == 'android'
     global_sources += custom_target('android-apk-filesystem',
         input: 'android-apk-filesystem.rb',
         output: 'android-apk-filesystem.xxd',
-        command: [xxd, '-i', '-n', 'android_apk_filesystem', '@INPUT@'],
+        command: [xxd, 'android_apk_filesystem', '@INPUT@'],
         capture: true)
 endif
