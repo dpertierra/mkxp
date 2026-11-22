@@ -24,6 +24,7 @@ jobs:
           msystem: mingw64
           install: >-
             base-devel
+            bison
             git
             ruby
             vim
