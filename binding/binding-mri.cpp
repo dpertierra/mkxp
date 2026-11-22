@@ -165,6 +165,13 @@ json5pp::value rb2json(VALUE v);
 
 RB_METHOD(mkxpParseCSV);
 
+#ifdef MKXPZ_DEBUGGER
+/* Extensión C de la gema `debug` (binding/debugger), enlazada estáticamente
+ * porque no se puede cargar un debug.so externo de forma portable. */
+extern "C" void Init_debug(void);
+RB_METHOD(mkxpLoadDebugExt);
+#endif
+
 static void mriBindingInit() {
     tableBindingInit();
     etcBindingInit();
@@ -264,6 +271,9 @@ static void mriBindingInit() {
     _rb_define_module_function(mod, "default_font_family=", mkxpSetDefaultFontFamily);
     
     _rb_define_module_function(mod, "parse_csv", mkxpParseCSV);
+#ifdef MKXPZ_DEBUGGER
+    _rb_define_module_function(mod, "load_debug_ext", mkxpLoadDebugExt);
+#endif
     
     _rb_define_method(rb_cString, "to_utf8", mkxpStringToUTF8);
     _rb_define_method(rb_cString, "to_utf8!", mkxpStringToUTF8Bang);
@@ -745,6 +755,22 @@ RB_METHOD_GUARD(mkxpParseCSV) {
     return ret;
 }
 RB_METHOD_GUARD_END
+
+#ifdef MKXPZ_DEBUGGER
+/* System.load_debug_ext: registra DEBUGGER__.capture_frames y compañía.
+ * Lo llama debug/frame_info.rb en lugar de `require 'debug/debug.so'`. */
+RB_METHOD(mkxpLoadDebugExt) {
+    RB_UNUSED_PARAM;
+    
+    static bool loaded = false;
+    if (!loaded) {
+        Init_debug();
+        loaded = true;
+    }
+    
+    return Qtrue;
+}
+#endif
 
 json5pp::value loadUserSettings() {
     json5pp::value ret;

@@ -196,6 +196,7 @@ if host_system == 'android'
         dependencies: global_dependencies,
         include_directories: global_include_dirs,
         link_args: global_link_args,
+        c_args: global_args,
         cpp_args: global_args,
         install: true
     )
@@ -206,6 +207,7 @@ else
         include_directories: global_include_dirs,
         install_rpath: rpath,
         link_args: global_link_args,
+        c_args: global_args,
         cpp_args: global_args,
         objc_args: global_args,
         objcpp_args: global_args,

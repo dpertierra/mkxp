@@ -7,6 +7,7 @@ option('force32', type: 'boolean', value: false, description: 'Force compiler to
 option('cxx11_experimental', type: 'boolean', value: false, description: 'Toggles between using ghc/filesystem or C++11 <experimental/filesystem>')
 option('shared_fluid', type: 'boolean', value: true, description: 'Dynamically link fluidsynth at build time')
 option('cjk_fallback_font', type: 'boolean', value: false, description: 'Use WenQuanYi Micro Hei as the fallback font')
+option('use_debugger', type: 'boolean', value: true, description: 'Link the C extension of the `debug` gem (VS Code / rdbg debugging of Ruby scripts)')
 option('use_miniffi', type: 'boolean', value: true, description: 'Enable MiniFFI Ruby module (Win32API)')
 option('enable-https', type: 'boolean', value: true, description: 'Support HTTPS for get/post requests. Requires OpenSSL.')
 option('workdir_current', type: 'boolean', value: false, description: 'Keep current directory on startup')

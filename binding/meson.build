@@ -49,6 +49,15 @@ if miniffi == true
     binding_source += files('miniffi.cpp')
 endif
 
+if get_option('use_debugger') == true and host_system != 'android'
+    # Extensión C de la gema `debug` (rdbg / VS Code), enlazada en el ejecutable.
+    global_args += ['-DMKXPZ_DEBUGGER', '-DHAVE_RB_ISEQ_PARAMETERS', '-DHAVE_RB_ISEQ_CODE_LOCATION']
+    if get_option('mri_version').version_compare('>=3.1')
+        global_args += '-DHAVE_RB_ISEQ_TYPE'
+    endif
+    binding_source += files('debugger/debug.c', 'debugger/iseq_collector.c')
+endif
+
 global_sources += binding_source
 
 if host_system == 'android'
