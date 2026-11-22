@@ -481,6 +481,13 @@ struct SettingsMenuPrivate
 		}
 	}
 
+	/* Modifiers coexist with other actions on the same key by design
+	 * (e.g. Shift is both A and Shift), so they never raise the warning */
+	static bool isModifier(Input::ButtonCode code)
+	{
+		return code == Input::Shift || code == Input::Ctrl || code == Input::Alt;
+	}
+
 	void updateDuplicateStatus()
 	{
 		for (size_t i = 0; i < bWidgets.size(); ++i)
@@ -501,6 +508,9 @@ struct SettingsMenuPrivate
 				for (size_t k = 0; k < bWidgets.size(); ++k)
 				{
 					if (k == i)
+						continue;
+
+					if (isModifier(bWidgets[i].vb.code) || isModifier(bWidgets[k].vb.code))
 						continue;
 
 					for (size_t l = 0; l < 4; ++l)
