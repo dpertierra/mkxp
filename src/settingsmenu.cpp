@@ -1453,6 +1453,10 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			break;
 		}
 
+		/* Not a controller event: skip the controller cases below, which
+		 * would read the key event's fields as a button */
+		break;
+
 	case SDL_CONTROLLERBUTTONDOWN:
 		if (p->state != AwaitingInput)
 		{
