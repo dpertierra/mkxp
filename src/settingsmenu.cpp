@@ -26,6 +26,7 @@
 #include <SDL_surface.h>
 #include <SDL_keyboard.h>
 #include <SDL_rect.h>
+#include <SDL_timer.h>
 
 #include "keybindings.h"
 #include "eventthread.h"
@@ -142,6 +143,9 @@ struct Widget
 	void leave();
 	void click(int x, int y, uint8_t button);
 
+	/* Window-space rectangle, used for controller/keyboard navigation */
+	IntRect area() const { return rect; }
+
 protected:
 	SMP *p;
 	IntRect rect;
@@ -172,6 +176,9 @@ struct BindingWidget : Widget
     }
 
 	void appendBindings(BDescVec &d) const;
+
+	/* Window-space rectangle of slot cell i (0..3) */
+	IntRect cellRect(int i) const;
 
 protected:
 	int hoveredCell;
@@ -291,8 +298,25 @@ struct SettingsMenuPrivate
 	SourceDesc *captureDesc;
 	const char *captureName;
 
+	/* Controller / keyboard navigation: every clickable spot on the page
+	 * (binding cells and buttons), and the selected one */
+	struct NavTarget
+	{
+		Widget *w;
+		IntRect r;
+	};
+	std::vector<NavTarget> navTargets;
+	size_t navSel;
+	/* Stick direction already acted on, per axis (-1, 0, 1) */
+	int stickDir[2];
+
+	/* A controller can not cancel a capture (any button gets bound),
+	 * so it times out instead */
+	SDL_TimerID captureTimer;
+	static Uint32 captureTimeoutEvent;
+
 	SettingsMenuPrivate(RGSSThreadData &rtData)
-	    : rtData(rtData)
+	    : rtData(rtData), navSel(0), stickDir{0, 0}, captureTimer(0)
 	{}
 
 	SDL_Surface *createSurface(int w, int h)
@@ -536,10 +560,17 @@ struct SettingsMenuPrivate
 		for (size_t i = 0; i < widgets.size(); ++i)
 			widgets[i]->draw(winSurf);
 
+		if (navSel < navTargets.size())
+		{
+			const IntRect &r = navTargets[navSel].r;
+			drawOff = Vec2i();
+			strokeRectInner(winSurf, r.x+2, r.y+2, r.w-4, r.h-4, 2, 255, 200, 0);
+		}
+
 		if (state == AwaitingInput)
 		{
-			char buf[64];
-			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\"", captureName);
+			char buf[128];
+			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (5 s to cancel)", captureName);
 
 			drawOff = Vec2i();
 
@@ -595,6 +626,7 @@ struct SettingsMenuPrivate
 
 		if (state == AwaitingInput)
 		{
+			stopCaptureTimer();
 			state = Idle;
 			redraw();
 			return;
@@ -666,6 +698,7 @@ struct SettingsMenuPrivate
 			return false;
 		}
 
+		stopCaptureTimer();
 		captureDesc = 0;
 		state = Idle;
 		updateDuplicateStatus();
@@ -684,6 +717,8 @@ struct SettingsMenuPrivate
 			captureDesc = &desc;
 			captureName = str;
 			state = AwaitingInput;
+			stopCaptureTimer();
+			captureTimer = SDL_AddTimer(5000, onCaptureTimeout, 0);
 		}
 		else /* e.button == SDL_BUTTON_RIGHT */
 		{
@@ -722,7 +757,125 @@ struct SettingsMenuPrivate
 			widgets.push_back(&pageLabel);
 		}
 
+		/* Keep a selected button (e.g. Next) selected across pages */
+		Widget *prevSel = navSel < navTargets.size() ? navTargets[navSel].w : 0;
+		bool keepButton = false;
+		for (size_t i = 0; i < buttons.size(); ++i)
+			keepButton = keepButton || prevSel == &buttons[i];
+
+		navTargets.clear();
+		navSel = 0;
+
+		for (size_t i = page*pageSize; i < bWidgets.size() && i < (page+1)*pageSize; ++i)
+			for (int c = 0; c < 4; ++c)
+				navTargets.push_back({ &bWidgets[i], bWidgets[i].cellRect(c) });
+
+		for (size_t i = 0; i < buttons.size(); ++i)
+		{
+			if (keepButton && prevSel == &buttons[i])
+				navSel = navTargets.size();
+			navTargets.push_back({ &buttons[i], buttons[i].area() });
+		}
+
 		redraw();
+	}
+
+	/* Pick the nearest target in direction (dx, dy); off-axis distance
+	 * weighs more so moving stays in the same row/column when possible */
+	void moveSelection(int dx, int dy)
+	{
+		if (state != Idle || navTargets.empty())
+			return;
+
+		const IntRect &cur = navTargets[navSel].r;
+		const int cx = cur.x + cur.w/2, cy = cur.y + cur.h/2;
+		long best = -1;
+		size_t bestI = navSel;
+
+		for (size_t i = 0; i < navTargets.size(); ++i)
+		{
+			const IntRect &r = navTargets[i].r;
+			const int vx = r.x + r.w/2 - cx, vy = r.y + r.h/2 - cy;
+			const int along = vx*dx + vy*dy;
+			const int across = abs(vx*dy - vy*dx);
+
+			if (along <= 0)
+				continue;
+
+			const long score = along + 3L*across;
+			if (best < 0 || score < best)
+			{
+				best = score;
+				bestI = i;
+			}
+		}
+
+		navSel = bestI;
+		redraw();
+	}
+
+	/* Same as clicking the selected target: left binds a cell or presses a
+	 * button, right clears a cell */
+	void activateSelection(uint8_t button)
+	{
+		if (state != Idle || navSel >= navTargets.size())
+			return;
+
+		const IntRect &r = navTargets[navSel].r;
+		navTargets[navSel].w->click(r.x + r.w/2, r.y + r.h/2, button);
+	}
+
+	void onPadButton(uint8_t b)
+	{
+		switch (b)
+		{
+		case SDL_CONTROLLER_BUTTON_DPAD_UP:    moveSelection(0, -1); break;
+		case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  moveSelection(0, 1);  break;
+		case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  moveSelection(-1, 0); break;
+		case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: moveSelection(1, 0);  break;
+		case SDL_CONTROLLER_BUTTON_A:          activateSelection(SDL_BUTTON_LEFT);  break;
+		case SDL_CONTROLLER_BUTTON_X:          activateSelection(SDL_BUTTON_RIGHT); break;
+		case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  onPrevPage(); break;
+		case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: onNextPage(); break;
+		case SDL_CONTROLLER_BUTTON_START:      onAccept(); break;
+		case SDL_CONTROLLER_BUTTON_B:          onCancel(); break;
+		default: break;
+		}
+	}
+
+	/* Left stick: one step per push; it has to return to center to move again */
+	void onPadAxis(uint8_t axis, int value)
+	{
+		if (axis > SDL_CONTROLLER_AXIS_LEFTY)
+			return;
+
+		const int dir = value > JAXIS_THRESHOLD ? 1 : value < -JAXIS_THRESHOLD ? -1 : 0;
+		if (dir == stickDir[axis])
+			return;
+
+		stickDir[axis] = dir;
+		if (dir == 0)
+			return;
+
+		if (axis == SDL_CONTROLLER_AXIS_LEFTX)
+			moveSelection(dir, 0);
+		else
+			moveSelection(0, dir);
+	}
+
+	static Uint32 onCaptureTimeout(Uint32, void *)
+	{
+		SDL_Event e = {};
+		e.type = captureTimeoutEvent;
+		SDL_PushEvent(&e);
+		return 0;
+	}
+
+	void stopCaptureTimer()
+	{
+		if (captureTimer)
+			SDL_RemoveTimer(captureTimer);
+		captureTimer = 0;
 	}
 
 	void onPrevPage()
@@ -764,6 +917,8 @@ struct SettingsMenuPrivate
 		destroyReq = true;
 	}
 };
+
+Uint32 SettingsMenuPrivate::captureTimeoutEvent = (Uint32) -1;
 
 Widget::Widget(SMP *p, const IntRect &rect)
     : p(p), rect(rect)
@@ -915,6 +1070,16 @@ int BindingWidget::cellIndex(int x, int y) const
 	return -1;
 }
 
+IntRect BindingWidget::cellRect(int i) const
+{
+	const int cellW = (rect.w*BW_CELL_R) / 2;
+	const int cellH = rect.h / 2;
+	const int cellOffX = (1.0f-BW_CELL_R) * rect.w;
+
+	return IntRect(rect.x + cellOffX + (i % 2)*cellW, rect.y + (i / 2)*cellH,
+	               cellW, cellH);
+}
+
 void BindingWidget::appendBindings(BDescVec &d) const
 {
 	for (size_t i = 0; i < 4; ++i)
@@ -1003,6 +1168,9 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
             menuButtons.push_back({ a.code, a.name });
     }
     
+	if (SMP::captureTimeoutEvent == (Uint32) -1)
+		SMP::captureTimeoutEvent = SDL_RegisterEvents(1);
+
 	p = new SettingsMenuPrivate(rtData);
 	p->state = Idle;
 
@@ -1067,7 +1235,7 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	}
 
 	/* Labels */
-	const char *info = "Left click: bind a slot. Right click: clear it. Mouse wheel: change page";
+	const char *info = "Click / A / Space: bind   Right click / X / Del: clear   Wheel / LB RB: page   Start: accept   B: cancel";
 	p->infoLabel = Label(p, IntRect(16, 6, winSize.x, 16), info, cText, cText, cText);
 
 	const char *warn = "Warning: Same physical key bound to multiple slots";
@@ -1084,6 +1252,7 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 
 SettingsMenu::~SettingsMenu()
 {
+	p->stopCaptureTimer();
 	TTF_CloseFont(p->font);
 	SDL_DestroyWindow(p->window);
 
@@ -1092,6 +1261,17 @@ SettingsMenu::~SettingsMenu()
 
 bool SettingsMenu::onEvent(const SDL_Event &event)
 {
+	if (event.type == SMP::captureTimeoutEvent)
+	{
+		if (p->state == AwaitingInput)
+		{
+			p->captureTimer = 0;
+			p->state = Idle;
+			p->redraw();
+		}
+		return true;
+	}
+
 	/* First, check whether this event is for us */
 	switch (event.type)
 	{
@@ -1172,13 +1352,28 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	case SDL_KEYDOWN:
 		if (p->state != AwaitingInput)
 		{
-			if (event.key.keysym.sym == SDLK_RETURN)
-				p->onAccept();
-			else if (event.key.keysym.sym == SDLK_ESCAPE)
-				p->onCancel();
+			switch (event.key.keysym.sym)
+			{
+			case SDLK_RETURN:    p->onAccept(); break;
+			case SDLK_ESCAPE:    p->onCancel(); break;
+			case SDLK_UP:        p->moveSelection(0, -1); break;
+			case SDLK_DOWN:      p->moveSelection(0, 1);  break;
+			case SDLK_LEFT:      p->moveSelection(-1, 0); break;
+			case SDLK_RIGHT:     p->moveSelection(1, 0);  break;
+			case SDLK_SPACE:     p->activateSelection(SDL_BUTTON_LEFT);  break;
+			case SDLK_DELETE:
+			case SDLK_BACKSPACE: p->activateSelection(SDL_BUTTON_RIGHT); break;
+			case SDLK_PAGEUP:    p->onPrevPage(); break;
+			case SDLK_PAGEDOWN:  p->onNextPage(); break;
+			default: break;
+			}
 
 			return true;
 		}
+
+		/* Holding the key that started the capture must not bind itself */
+		if (event.key.repeat)
+			return true;
 
 		/* Don't let the user bind keys that trigger
 		 * mkxp functions */
@@ -1193,9 +1388,19 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		}
 
 	case SDL_CONTROLLERBUTTONDOWN:
+		if (p->state != AwaitingInput)
+		{
+			p->onPadButton(event.cbutton.button);
+			return true;
+		}
+		break;
+
 	case SDL_CONTROLLERAXISMOTION:
 		if (p->state != AwaitingInput)
+		{
+			p->onPadAxis(event.caxis.axis, event.caxis.value);
 			return true;
+		}
 		break;
 
 	case SDL_MOUSEBUTTONDOWN:

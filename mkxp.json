@@ -600,6 +600,14 @@
     //
     // "remappableKeys": ["ALT", "SHIFT", "CTRL"],
 
+    // Controller buttons that, held together, open the F1 key bindings menu
+    // (it can then be used with the controller: D-pad/stick to move, A to
+    // bind, X to clear, LB/RB to change page, Start to accept, B to cancel).
+    // An empty list turns it off. Needs "enableSettings".
+    // (default: ["BACK", "START"])
+    //
+    // "settingsPadCombo": ["BACK", "START"],
+
 
     // Dump tile atlas (for debugging purposes)
     // (default: false)

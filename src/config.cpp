@@ -206,6 +206,7 @@ void Config::read(int argc, char *argv[]) {
         {"dumpAtlas", false},
         {"customActions", json::array({})},
         {"remappableKeys", json::array({})},
+        {"settingsPadCombo", json::array({"BACK", "START"})},
         {"bindingNames", json::object({
             {"a", "A"},
             {"b", "B"},
@@ -353,6 +354,7 @@ try { exp } catch (...) {}
     BINDING_NAME(r);
     
     fillStringVec(opts["remappableKeys"], remappableKeys);
+    fillStringVec(opts["settingsPadCombo"], settingsPadCombo);
     for (std::string &k : remappableKeys)
         std::transform(k.begin(), k.end(), k.begin(),
             [](unsigned char c) { return std::toupper(c); });

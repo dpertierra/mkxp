@@ -33,12 +33,14 @@
 #include <alc.h>
 #include <alext.h>
 #include <cmath>
+#include <algorithm>
 
 #include "sharedstate.h"
 #include "graphics.h"
 
 #ifndef MKXPZ_BUILD_XCODE
 #include "settingsmenu.h"
+#include "input/input.h"
 #include "gamecontrollerdb.txt.xxd"
 #else
 #include "system/system.h"
@@ -273,6 +275,10 @@ void EventThread::process(RGSSThreadData &rtData)
                 delete sMenu;
                 sMenu = 0;
                 
+                /* Releases that happened while the menu had focus never
+                 * reached the game; clear so nothing stays held */
+                resetInputStates();
+                
                 updateCursorState(cursorInWindow && windowFocused, gameScreen);
             }
             
@@ -471,8 +477,43 @@ void EventThread::process(RGSSThreadData &rtData)
                 break;
                 
             case SDL_CONTROLLERBUTTONDOWN:
+            {
                 controllerState.buttons[event.cbutton.button] = true;
+                
+                /* "settingsPadCombo": open the F1 menu from a controller
+                 * once every button of the combo is held */
+                const auto &combo = rtData.config.settingsPadCombo;
+                bool inCombo = false, allHeld = !combo.empty();
+                
+                for (std::string name : combo)
+                {
+                    std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+                    auto b = strToGCButton.find(name);
+                    if (b == strToGCButton.end())
+                    {
+                        allHeld = false;
+                        break;
+                    }
+                    inCombo = inCombo || b->second == event.cbutton.button;
+                    allHeld = allHeld && controllerState.buttons[b->second];
+                }
+                
+                if (inCombo && allHeld && rtData.config.enableSettings && shState)
+                {
+#ifndef MKXPZ_BUILD_XCODE
+                    if (!sMenu)
+                    {
+                        sMenu = new SettingsMenu(rtData);
+                        updateCursorState(false, gameScreen);
+                    }
+                    
+                    sMenu->raise();
+#else
+                    openSettingsWindow();
+#endif
+                }
                 break;
+            }
                 
             case SDL_CONTROLLERBUTTONUP:
                 controllerState.buttons[event.cbutton.button] = false;

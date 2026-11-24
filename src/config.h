@@ -181,6 +181,9 @@ struct Config {
     // Built-in modifier/function keys made remappable ("ALT", "CTRL", ...)
     std::vector<std::string> remappableKeys;
     
+    // Controller buttons that, held together, open the F1 menu. Empty: off.
+    std::vector<std::string> settingsPadCombo;
+    
     std::string userConfPath;
     
     /* Internal */
