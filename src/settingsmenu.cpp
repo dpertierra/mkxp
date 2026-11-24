@@ -570,7 +570,7 @@ struct SettingsMenuPrivate
 		if (state == AwaitingInput)
 		{
 			char buf[128];
-			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (5 s to cancel)", captureName);
+			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (Esc or wait 5 s to cancel)", captureName);
 
 			drawOff = Vec2i();
 
@@ -1235,7 +1235,7 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	}
 
 	/* Labels */
-	const char *info = "Click / A / Space: bind   Right click / X / Del: clear   Wheel / LB RB: page   Start: accept   B: cancel";
+	const char *info = "Click / A / Space: bind   Right click / X / Del: clear   Wheel / LB RB: page   Start / Enter: accept   B / Esc: cancel";
 	p->infoLabel = Label(p, IntRect(16, 6, winSize.x, 16), info, cText, cText, cText);
 
 	const char *warn = "Warning: Same physical key bound to multiple slots";
@@ -1374,6 +1374,16 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		/* Holding the key that started the capture must not bind itself */
 		if (event.key.repeat)
 			return true;
+
+		/* Esc cancels the capture (it can not be bound by hand; "Reset
+		 * defaults" still restores its default binding) */
+		if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+		{
+			p->stopCaptureTimer();
+			p->state = Idle;
+			p->redraw();
+			return true;
+		}
 
 		/* Don't let the user bind keys that trigger
 		 * mkxp functions */
