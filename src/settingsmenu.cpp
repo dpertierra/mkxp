@@ -313,10 +313,15 @@ struct SettingsMenuPrivate
 	/* A controller can not cancel a capture (any button gets bound),
 	 * so it times out instead */
 	SDL_TimerID captureTimer;
+
+	/* Esc / pad B during a capture: a short press binds it, holding it
+	 * cancels. 0 = none pending, 1 = Esc held, 2 = pad B held */
+	int holdPending;
+	SDL_TimerID holdTimer;
 	static Uint32 captureTimeoutEvent;
 
 	SettingsMenuPrivate(RGSSThreadData &rtData)
-	    : rtData(rtData), navSel(0), stickDir{0, 0}, captureTimer(0)
+	    : rtData(rtData), navSel(0), stickDir{0, 0}, captureTimer(0), holdPending(0), holdTimer(0)
 	{}
 
 	SDL_Surface *createSurface(int w, int h)
@@ -569,8 +574,8 @@ struct SettingsMenuPrivate
 
 		if (state == AwaitingInput)
 		{
-			char buf[128];
-			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (Esc or wait 5 s to cancel)", captureName);
+			char buf[192];
+			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (hold Esc / B or wait 5 s to cancel)", captureName);
 
 			drawOff = Vec2i();
 
@@ -863,10 +868,12 @@ struct SettingsMenuPrivate
 			moveSelection(0, dir);
 	}
 
-	static Uint32 onCaptureTimeout(Uint32, void *)
+	/* param: 0 = capture timed out, 1 = Esc / pad B held long enough */
+	static Uint32 onCaptureTimeout(Uint32, void *param)
 	{
 		SDL_Event e = {};
 		e.type = captureTimeoutEvent;
+		e.user.code = (int) (intptr_t) param;
 		SDL_PushEvent(&e);
 		return 0;
 	}
@@ -875,7 +882,35 @@ struct SettingsMenuPrivate
 	{
 		if (captureTimer)
 			SDL_RemoveTimer(captureTimer);
-		captureTimer = 0;
+		if (holdTimer)
+			SDL_RemoveTimer(holdTimer);
+		captureTimer = holdTimer = 0;
+		holdPending = 0;
+	}
+
+	void cancelCapture()
+	{
+		stopCaptureTimer();
+		captureDesc = 0;
+		state = Idle;
+		redraw();
+	}
+
+	void commitCapture(const SourceDesc &src)
+	{
+		*captureDesc = src;
+		stopCaptureTimer();
+		captureDesc = 0;
+		state = Idle;
+		updateDuplicateStatus();
+		redraw();
+	}
+
+	void startHold(int which)
+	{
+		holdPending = which;
+		if (!holdTimer)
+			holdTimer = SDL_AddTimer(1000, onCaptureTimeout, (void *) (intptr_t) 1);
 	}
 
 	void onPrevPage()
@@ -1263,12 +1298,14 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 {
 	if (event.type == SMP::captureTimeoutEvent)
 	{
-		if (p->state == AwaitingInput)
-		{
+		if (event.user.code == 0)
 			p->captureTimer = 0;
-			p->state = Idle;
-			p->redraw();
-		}
+		else
+			p->holdTimer = 0;
+
+		if (p->state == AwaitingInput && (event.user.code == 0 || p->holdPending))
+			p->cancelCapture();
+
 		return true;
 	}
 
@@ -1305,7 +1342,29 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	{
 	/* Ignore these event */
 	case SDL_MOUSEBUTTONUP :
+		return true;
+
+	/* A short Esc / pad B press during a capture binds it on release */
 	case SDL_KEYUP :
+		if (p->state == AwaitingInput && p->holdPending == 1 &&
+		    event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+		{
+			SourceDesc src;
+			src.type = Key;
+			src.d.scan = SDL_SCANCODE_ESCAPE;
+			p->commitCapture(src);
+		}
+		return true;
+
+	case SDL_CONTROLLERBUTTONUP :
+		if (p->state == AwaitingInput && p->holdPending == 2 &&
+		    event.cbutton.button == SDL_CONTROLLER_BUTTON_B)
+		{
+			SourceDesc src;
+			src.type = CButton;
+			src.d.cb = SDL_CONTROLLER_BUTTON_B;
+			p->commitCapture(src);
+		}
 		return true;
 
 	case SDL_WINDOWEVENT :
@@ -1375,13 +1434,10 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		if (event.key.repeat)
 			return true;
 
-		/* Esc cancels the capture (it can not be bound by hand; "Reset
-		 * defaults" still restores its default binding) */
+		/* Esc: bound on a short press (on release), held = cancel */
 		if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
 		{
-			p->stopCaptureTimer();
-			p->state = Idle;
-			p->redraw();
+			p->startHold(1);
 			return true;
 		}
 
@@ -1401,6 +1457,13 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		if (p->state != AwaitingInput)
 		{
 			p->onPadButton(event.cbutton.button);
+			return true;
+		}
+
+		/* Pad B: bound on a short press (on release), held = cancel */
+		if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B)
+		{
+			p->startHold(2);
 			return true;
 		}
 		break;
