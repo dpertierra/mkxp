@@ -848,6 +848,15 @@ struct SettingsMenuPrivate
 		}
 	}
 
+	/* Remember where the left stick is without acting on it. Used while
+	 * capturing, so the push that was just bound does not also move the
+	 * selection once the capture ends */
+	void trackStick(uint8_t axis, int value)
+	{
+		if (axis <= SDL_CONTROLLER_AXIS_LEFTY)
+			stickDir[axis] = value > JAXIS_THRESHOLD ? 1 : value < -JAXIS_THRESHOLD ? -1 : 0;
+	}
+
 	/* Left stick: one step per push; it has to return to center to move again */
 	void onPadAxis(uint8_t axis, int value)
 	{
@@ -1478,6 +1487,8 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			p->onPadAxis(event.caxis.axis, event.caxis.value);
 			return true;
 		}
+
+		p->trackStick(event.caxis.axis, event.caxis.value);
 		break;
 
 	case SDL_MOUSEBUTTONDOWN:
