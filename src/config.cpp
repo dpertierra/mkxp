@@ -375,6 +375,7 @@ try { exp } catch (...) {}
             a.name = str("name");
             a.key = str("key");
             a.button = str("button");
+            a.rawKey = str("rawKey");
             if (a.name.empty())
                 a.name = a.id;
             

@@ -209,6 +209,7 @@ std::vector<ExtraAction> extraActions(const Config &conf)
 		a.builtin = false;
 		a.key = c.key;
 		a.button = c.button;
+		a.rawKey = c.rawKey;
 		out.push_back(a);
 	}
 

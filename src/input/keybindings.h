@@ -111,6 +111,7 @@ struct ExtraAction
 	Input::ButtonCode code;
 	bool builtin;
 	std::string key, button; /* custom defaults only */
+	std::string rawKey;      /* custom only: also drives this raw key */
 };
 
 std::vector<ExtraAction> extraActions(const Config &conf);

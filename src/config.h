@@ -174,6 +174,7 @@ struct Config {
         std::string name;   // Label shown in the F1 menu
         std::string key;    // Optional default key (SDL name, e.g. "TAB")
         std::string button; // Optional default pad button (e.g. "LEFTSTICK")
+        std::string rawKey; // Optional: also reported as this raw key (Input.pressex?(:F))
     };
     std::vector<CustomAction> customActions;
     

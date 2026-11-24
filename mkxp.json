@@ -581,8 +581,15 @@
     // optional defaults. Saved bindings are matched by id, so the order of
     // this list can change freely.
     //
+    // An action can also set "rawKey" (SDL scancode name): while the action is
+    // pressed, Input.pressex? / triggerex? / repeatex? / releaseex? report that
+    // raw key too, so scripts that read the keyboard directly follow the
+    // player's remapped keys and controller buttons. Leave "key" out if it
+    // would be the same physical key as "rawKey", to avoid a double trigger.
+    //
     // "customActions": [
     //   { "id": "TURBO", "name": "Turbo", "key": "TAB", "button": "BACK" },
+    //   { "id": "SEARCH", "name": "Search (F)", "button": "Y", "rawKey": "F" },
     //   { "id": "QUICK_MAP", "name": "Quick map" }
     // ],
 

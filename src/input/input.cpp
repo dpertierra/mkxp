@@ -25,6 +25,7 @@
 #include "eventthread.h"
 #include "input/keybindings.h"
 #include "util/exception.h"
+#include "util/debugwriter.h"
 #include "util/util.h"
 
 #include <SDL_scancode.h>
@@ -33,6 +34,7 @@
 #include <SDL_clipboard.h>
 
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include <unordered_map>
 #include <string.h>
@@ -706,6 +708,15 @@ struct InputPrivate
     // Raw keystates
     uint8_t rawStateArray[SDL_NUM_SCANCODES*2];
     
+    // Custom actions with "rawKey": while active they also set that raw key,
+    // so Input.pressex?(:F) etc. follow the action's (remappable) bindings
+    struct RawAlias
+    {
+        int scancode;
+        Input::ButtonCode action;
+    };
+    std::vector<RawAlias> rawAliases;
+    
     uint8_t *rawStates;
     uint8_t *rawStatesOld;
     
@@ -771,6 +782,7 @@ struct InputPrivate
         last_update = 0;
         
         initStaticKbBindings(rtData.config);
+        initRawAliases(rtData.config);
         initMsBindings();
         
         /* Main thread should have these posted by now */
@@ -988,6 +1000,27 @@ struct InputPrivate
         appendBindings(ctrlBBindings);
     }
     
+    void initRawAliases(const Config &conf)
+    {
+        for (const ExtraAction &a : extraActions(conf))
+        {
+            if (a.builtin || a.rawKey.empty())
+                continue;
+            
+            std::string key = a.rawKey;
+            std::transform(key.begin(), key.end(), key.begin(), ::toupper);
+            
+            auto k = strToScancode.find(key);
+            if (k == strToScancode.end())
+            {
+                Debug() << "Invalid rawKey for custom action" << a.id << ":" << a.rawKey;
+                continue;
+            }
+            
+            rawAliases.push_back({ k->second, a.code });
+        }
+    }
+    
     void initStaticKbBindings(const Config &conf)
     {
         kbStatBindings.clear();
@@ -1075,6 +1108,10 @@ struct InputPrivate
     {
         
         memcpy(rawStates, shState->eThread().keyStates, SDL_NUM_SCANCODES);
+        
+        for (const RawAlias &a : rawAliases)
+            if (getState(a.action).pressed)
+                rawStates[a.scancode] = 1;
         
         for (int i = 0; i < SDL_NUM_SCANCODES; i++)
         {
