@@ -573,6 +573,41 @@
     //  "x": ...,
     // },
 
+    // Extra remappable actions, shown in the F1 menu after the base ones
+    // (up to 32). Each "id" becomes the Ruby constant Input::<ID> (letters,
+    // digits and underscores, starting with a letter), usable with
+    // Input.press? / trigger? / repeat?. "key" (SDL scancode name, e.g.
+    // "TAB") and "button" (SDL controller button, e.g. "LEFTSTICK") are
+    // optional defaults. Saved bindings are matched by id, so the order of
+    // this list can change freely.
+    //
+    // An action can also set "rawKey" (SDL scancode name): while the action is
+    // pressed, Input.pressex? / triggerex? / repeatex? / releaseex? report that
+    // raw key too, so scripts that read the keyboard directly follow the
+    // player's remapped keys and controller buttons. Leave "key" out if it
+    // would be the same physical key as "rawKey", to avoid a double trigger.
+    //
+    // "customActions": [
+    //   { "id": "TURBO", "name": "Turbo", "key": "TAB", "button": "BACK" },
+    //   { "id": "SEARCH", "name": "Search (F)", "button": "Y", "rawKey": "F" },
+    //   { "id": "QUICK_MAP", "name": "Quick map" }
+    // ],
+
+    // Built-in keys that are fixed by default and can be listed here to
+    // make them remappable in the F1 menu (and bindable to controller
+    // buttons): "SHIFT", "CTRL", "ALT", "F5".."F9". Their Ruby constants
+    // (Input::ALT, ...) keep working.
+    //
+    // "remappableKeys": ["ALT", "SHIFT", "CTRL"],
+
+    // Controller buttons that, held together, open the F1 key bindings menu
+    // (it can then be used with the controller: D-pad/stick to move, A to
+    // bind, X to clear, LB/RB to change page, Start to accept, B to cancel).
+    // An empty list turns it off. Needs "enableSettings".
+    // (default: ["BACK", "START"])
+    //
+    // "settingsPadCombo": ["BACK", "START"],
+
 
     // Dump tile atlas (for debugging purposes)
     // (default: false)

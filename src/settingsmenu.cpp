@@ -26,6 +26,7 @@
 #include <SDL_surface.h>
 #include <SDL_keyboard.h>
 #include <SDL_rect.h>
+#include <SDL_timer.h>
 
 #include "keybindings.h"
 #include "eventthread.h"
@@ -38,7 +39,7 @@
 #include <algorithm>
 #include <assert.h>
 
-const Vec2i winSize(840, 356);
+const Vec2i winSize(960, 356);
 
 const uint8_t cBgNorm = 50;
 const uint8_t cBgDark = 20;
@@ -78,6 +79,17 @@ struct VButton
 };
 
 static elementsN(vButtons);
+
+/* One entry per action shown in the menu: the 12 base ones, then the
+ * remappable built-in keys and the game's custom actions */
+struct MenuButton
+{
+	Input::ButtonCode code;
+	std::string str;
+};
+
+/* Actions per page: 3 columns x 4 rows */
+const size_t pageSize = 12;
 
 /* Human readable string representation */
 std::string sourceDescString(const SourceDesc &src)
@@ -131,6 +143,9 @@ struct Widget
 	void leave();
 	void click(int x, int y, uint8_t button);
 
+	/* Window-space rectangle, used for controller/keyboard navigation */
+	IntRect area() const { return rect; }
+
 protected:
 	SMP *p;
 	IntRect rect;
@@ -145,22 +160,25 @@ protected:
 
 struct BindingWidget : Widget
 {
-	VButton vb;
+	MenuButton vb;
 	/* Source slots */
 	SourceDesc src[4];
 	/* Flag indicating whether a slot source is used
 	 * for multiple button targets (red indicator) */
 	bool dupFlag[4];
 
-	BindingWidget(int vbIndex, SMP *p, const IntRect &rect)
+	BindingWidget(const MenuButton &vb, SMP *p, const IntRect &rect)
 	    : Widget(p, rect),
-	      vb(vButtons[vbIndex]),
+	      vb(vb),
 	      hoveredCell(-1)
 	{
         
     }
 
 	void appendBindings(BDescVec &d) const;
+
+	/* Window-space rectangle of slot cell i (0..3) */
+	IntRect cellRect(int i) const;
 
 protected:
 	int hoveredCell;
@@ -271,11 +289,39 @@ struct SettingsMenuPrivate
 	std::vector<Widget*> widgets;
 	Widget *hovered;
 
+	/* Paging: only the binding widgets of the current page are in `widgets` */
+	size_t page, pageCount;
+	char pageStr[32];
+	Label pageLabel;
+	size_t firstButton; /* index in `buttons` of the page buttons, if any */
+
 	SourceDesc *captureDesc;
 	const char *captureName;
 
+	/* Controller / keyboard navigation: every clickable spot on the page
+	 * (binding cells and buttons), and the selected one */
+	struct NavTarget
+	{
+		Widget *w;
+		IntRect r;
+	};
+	std::vector<NavTarget> navTargets;
+	size_t navSel;
+	/* Stick direction already acted on, per axis (-1, 0, 1) */
+	int stickDir[2];
+
+	/* A controller can not cancel a capture (any button gets bound),
+	 * so it times out instead */
+	SDL_TimerID captureTimer;
+
+	/* Esc / pad B during a capture: a short press binds it, holding it
+	 * cancels. 0 = none pending, 1 = Esc held, 2 = pad B held */
+	int holdPending;
+	SDL_TimerID holdTimer;
+	static Uint32 captureTimeoutEvent;
+
 	SettingsMenuPrivate(RGSSThreadData &rtData)
-	    : rtData(rtData)
+	    : rtData(rtData), navSel(0), stickDir{0, 0}, captureTimer(0), holdPending(0), holdTimer(0)
 	{}
 
 	SDL_Surface *createSurface(int w, int h)
@@ -434,7 +480,7 @@ struct SettingsMenuPrivate
 
 	void setupBindingData(const BDescVec &d)
 	{
-		size_t slotI[vButtonsN] = { 0 };
+		std::vector<size_t> slotI(bWidgets.size(), 0);
 
 		for (size_t i = 0; i < bWidgets.size(); ++i)
 			for (size_t j = 0; j < 4; ++j)
@@ -446,11 +492,13 @@ struct SettingsMenuPrivate
 			const Input::ButtonCode trg = desc.target;
 
 			size_t j;
-			for (j = 0; j < vButtonsN; ++j)
+			for (j = 0; j < bWidgets.size(); ++j)
 				if (bWidgets[j].vb.code == trg)
 					break;
 
-			assert(j < vButtonsN);
+			/* Binding for an action that is not listed */
+			if (j == bWidgets.size())
+				continue;
 
 			size_t &slot = slotI[j];
 			BindingWidget &w = bWidgets[j];
@@ -460,6 +508,13 @@ struct SettingsMenuPrivate
 
 			w.src[slot++] = desc.src;
 		}
+	}
+
+	/* Modifiers coexist with other actions on the same key by design
+	 * (e.g. Shift is both A and Shift), so they never raise the warning */
+	static bool isModifier(Input::ButtonCode code)
+	{
+		return code == Input::Shift || code == Input::Ctrl || code == Input::Alt;
 	}
 
 	void updateDuplicateStatus()
@@ -482,6 +537,9 @@ struct SettingsMenuPrivate
 				for (size_t k = 0; k < bWidgets.size(); ++k)
 				{
 					if (k == i)
+						continue;
+
+					if (isModifier(bWidgets[i].vb.code) || isModifier(bWidgets[k].vb.code))
 						continue;
 
 					for (size_t l = 0; l < 4; ++l)
@@ -507,10 +565,17 @@ struct SettingsMenuPrivate
 		for (size_t i = 0; i < widgets.size(); ++i)
 			widgets[i]->draw(winSurf);
 
+		if (navSel < navTargets.size())
+		{
+			const IntRect &r = navTargets[navSel].r;
+			drawOff = Vec2i();
+			strokeRectInner(winSurf, r.x+2, r.y+2, r.w-4, r.h-4, 2, 255, 200, 0);
+		}
+
 		if (state == AwaitingInput)
 		{
-			char buf[64];
-			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\"", captureName);
+			char buf[192];
+			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (hold Esc / B or wait 5 s to cancel)", captureName);
 
 			drawOff = Vec2i();
 
@@ -566,6 +631,7 @@ struct SettingsMenuPrivate
 
 		if (state == AwaitingInput)
 		{
+			stopCaptureTimer();
 			state = Idle;
 			redraw();
 			return;
@@ -637,6 +703,7 @@ struct SettingsMenuPrivate
 			return false;
 		}
 
+		stopCaptureTimer();
 		captureDesc = 0;
 		state = Idle;
 		updateDuplicateStatus();
@@ -655,6 +722,8 @@ struct SettingsMenuPrivate
 			captureDesc = &desc;
 			captureName = str;
 			state = AwaitingInput;
+			stopCaptureTimer();
+			captureTimer = SDL_AddTimer(5000, onCaptureTimeout, 0);
 		}
 		else /* e.button == SDL_BUTTON_RIGHT */
 		{
@@ -664,6 +733,205 @@ struct SettingsMenuPrivate
 
 		updateDuplicateStatus();
 		redraw();
+	}
+
+	void setPage(size_t newPage)
+	{
+		page = newPage;
+
+		if (hovered)
+		{
+			hovered->leave();
+			hovered = 0;
+		}
+
+		widgets.clear();
+
+		for (size_t i = page*pageSize; i < bWidgets.size() && i < (page+1)*pageSize; ++i)
+			widgets.push_back(&bWidgets[i]);
+
+		for (size_t i = 0; i < buttons.size(); ++i)
+			widgets.push_back(&buttons[i]);
+
+		widgets.push_back(&infoLabel);
+		widgets.push_back(&dupWarnLabel);
+
+		if (pageCount > 1)
+		{
+			snprintf(pageStr, sizeof(pageStr), "Page %zu/%zu", page+1, pageCount);
+			widgets.push_back(&pageLabel);
+		}
+
+		/* Keep a selected button (e.g. Next) selected across pages */
+		Widget *prevSel = navSel < navTargets.size() ? navTargets[navSel].w : 0;
+		bool keepButton = false;
+		for (size_t i = 0; i < buttons.size(); ++i)
+			keepButton = keepButton || prevSel == &buttons[i];
+
+		navTargets.clear();
+		navSel = 0;
+
+		for (size_t i = page*pageSize; i < bWidgets.size() && i < (page+1)*pageSize; ++i)
+			for (int c = 0; c < 4; ++c)
+				navTargets.push_back({ &bWidgets[i], bWidgets[i].cellRect(c) });
+
+		for (size_t i = 0; i < buttons.size(); ++i)
+		{
+			if (keepButton && prevSel == &buttons[i])
+				navSel = navTargets.size();
+			navTargets.push_back({ &buttons[i], buttons[i].area() });
+		}
+
+		redraw();
+	}
+
+	/* Pick the nearest target in direction (dx, dy); off-axis distance
+	 * weighs more so moving stays in the same row/column when possible */
+	void moveSelection(int dx, int dy)
+	{
+		if (state != Idle || navTargets.empty())
+			return;
+
+		const IntRect &cur = navTargets[navSel].r;
+		const int cx = cur.x + cur.w/2, cy = cur.y + cur.h/2;
+		long best = -1;
+		size_t bestI = navSel;
+
+		for (size_t i = 0; i < navTargets.size(); ++i)
+		{
+			const IntRect &r = navTargets[i].r;
+			const int vx = r.x + r.w/2 - cx, vy = r.y + r.h/2 - cy;
+			const int along = vx*dx + vy*dy;
+			const int across = abs(vx*dy - vy*dx);
+
+			if (along <= 0)
+				continue;
+
+			const long score = along + 3L*across;
+			if (best < 0 || score < best)
+			{
+				best = score;
+				bestI = i;
+			}
+		}
+
+		navSel = bestI;
+		redraw();
+	}
+
+	/* Same as clicking the selected target: left binds a cell or presses a
+	 * button, right clears a cell */
+	void activateSelection(uint8_t button)
+	{
+		if (state != Idle || navSel >= navTargets.size())
+			return;
+
+		const IntRect &r = navTargets[navSel].r;
+		navTargets[navSel].w->click(r.x + r.w/2, r.y + r.h/2, button);
+	}
+
+	void onPadButton(uint8_t b)
+	{
+		switch (b)
+		{
+		case SDL_CONTROLLER_BUTTON_DPAD_UP:    moveSelection(0, -1); break;
+		case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  moveSelection(0, 1);  break;
+		case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  moveSelection(-1, 0); break;
+		case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: moveSelection(1, 0);  break;
+		case SDL_CONTROLLER_BUTTON_A:          activateSelection(SDL_BUTTON_LEFT);  break;
+		case SDL_CONTROLLER_BUTTON_X:          activateSelection(SDL_BUTTON_RIGHT); break;
+		case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  onPrevPage(); break;
+		case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: onNextPage(); break;
+		case SDL_CONTROLLER_BUTTON_START:      onAccept(); break;
+		case SDL_CONTROLLER_BUTTON_B:          onCancel(); break;
+		default: break;
+		}
+	}
+
+	/* Remember where the left stick is without acting on it. Used while
+	 * capturing, so the push that was just bound does not also move the
+	 * selection once the capture ends */
+	void trackStick(uint8_t axis, int value)
+	{
+		if (axis <= SDL_CONTROLLER_AXIS_LEFTY)
+			stickDir[axis] = value > JAXIS_THRESHOLD ? 1 : value < -JAXIS_THRESHOLD ? -1 : 0;
+	}
+
+	/* Left stick: one step per push; it has to return to center to move again */
+	void onPadAxis(uint8_t axis, int value)
+	{
+		if (axis > SDL_CONTROLLER_AXIS_LEFTY)
+			return;
+
+		const int dir = value > JAXIS_THRESHOLD ? 1 : value < -JAXIS_THRESHOLD ? -1 : 0;
+		if (dir == stickDir[axis])
+			return;
+
+		stickDir[axis] = dir;
+		if (dir == 0)
+			return;
+
+		if (axis == SDL_CONTROLLER_AXIS_LEFTX)
+			moveSelection(dir, 0);
+		else
+			moveSelection(0, dir);
+	}
+
+	/* param: 0 = capture timed out, 1 = Esc / pad B held long enough */
+	static Uint32 onCaptureTimeout(Uint32, void *param)
+	{
+		SDL_Event e = {};
+		e.type = captureTimeoutEvent;
+		e.user.code = (int) (intptr_t) param;
+		SDL_PushEvent(&e);
+		return 0;
+	}
+
+	void stopCaptureTimer()
+	{
+		if (captureTimer)
+			SDL_RemoveTimer(captureTimer);
+		if (holdTimer)
+			SDL_RemoveTimer(holdTimer);
+		captureTimer = holdTimer = 0;
+		holdPending = 0;
+	}
+
+	void cancelCapture()
+	{
+		stopCaptureTimer();
+		captureDesc = 0;
+		state = Idle;
+		redraw();
+	}
+
+	void commitCapture(const SourceDesc &src)
+	{
+		*captureDesc = src;
+		stopCaptureTimer();
+		captureDesc = 0;
+		state = Idle;
+		updateDuplicateStatus();
+		redraw();
+	}
+
+	void startHold(int which)
+	{
+		holdPending = which;
+		if (!holdTimer)
+			holdTimer = SDL_AddTimer(1000, onCaptureTimeout, (void *) (intptr_t) 1);
+	}
+
+	void onPrevPage()
+	{
+		if (state == Idle && page > 0)
+			setPage(page-1);
+	}
+
+	void onNextPage()
+	{
+		if (state == Idle && page+1 < pageCount)
+			setPage(page+1);
 	}
 
 	void onResetToDefault()
@@ -693,6 +961,8 @@ struct SettingsMenuPrivate
 		destroyReq = true;
 	}
 };
+
+Uint32 SettingsMenuPrivate::captureTimeoutEvent = (Uint32) -1;
 
 Widget::Widget(SMP *p, const IntRect &rect)
     : p(p), rect(rect)
@@ -761,7 +1031,7 @@ void BindingWidget::drawHandler(SDL_Surface *surf)
 	p->strokeRectInner(surf, cLine, 0, 0, rect.w, rect.h, 2);
 
 	/* Virtual button name */
-	p->drawText(surf, vb.str, 1, rect.h/2, cellOffX, Center, true);
+	p->drawText(surf, vb.str.c_str(), 1, rect.h/2, cellOffX, Center, true);
 
 	/* Cell frames */
 	p->strokeLineV(surf, cLine, cellOffX, 0, rect.h, 2);
@@ -816,7 +1086,7 @@ void BindingWidget::clickHandler(int x, int y, uint8_t button)
 	if (cell == -1)
 		return;
 
-	p->onBWidgetCellClicked(src[cell], vb.str, button);
+	p->onBWidgetCellClicked(src[cell], vb.str.c_str(), button);
 }
 
 int BindingWidget::cellIndex(int x, int y) const
@@ -842,6 +1112,16 @@ int BindingWidget::cellIndex(int x, int y) const
 			return 3;
 
 	return -1;
+}
+
+IntRect BindingWidget::cellRect(int i) const
+{
+	const int cellW = (rect.w*BW_CELL_R) / 2;
+	const int cellH = rect.h / 2;
+	const int cellOffX = (1.0f-BW_CELL_R) * rect.w;
+
+	return IntRect(rect.x + cellOffX + (i % 2)*cellW, rect.y + (i / 2)*cellH,
+	               cellW, cellH);
 }
 
 void BindingWidget::appendBindings(BDescVec &d) const
@@ -911,7 +1191,8 @@ void Label::drawHandler(SDL_Surface *surf)
 
 SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 {
-    // Set names to be shown in the menu
+    // Names shown in the menu: base actions first, then the extra ones
+    std::vector<MenuButton> menuButtons;
     {
 #define SET_BUTTON_NAME(n, b) vButtons[n].str = rtData.config.kbActionNames.b.c_str();
         SET_BUTTON_NAME(2, l);
@@ -923,8 +1204,17 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
         SET_BUTTON_NAME(10, y);
         SET_BUTTON_NAME(11, z);
 #undef SET_BUTTON_NAME
+        
+        for (size_t i = 0; i < vButtonsN; ++i)
+            menuButtons.push_back({ vButtons[i].code, vButtons[i].str });
+        
+        for (const ExtraAction &a : extraActions(rtData.config))
+            menuButtons.push_back({ a.code, a.name });
     }
     
+	if (SMP::captureTimeoutEvent == (Uint32) -1)
+		SMP::captureTimeoutEvent = SDL_RegisterEvents(1);
+
 	p = new SettingsMenuPrivate(rtData);
 	p->state = Idle;
 
@@ -943,23 +1233,23 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 
 	const size_t layoutW = 4;
 	const size_t layoutH = 3;
-	assert(layoutW*layoutH == vButtonsN);
+	assert(layoutW*layoutH == pageSize);
 
 	const int bWidgetW = winSize.x / layoutH;
 	const int bWidgetH = 64;
 	const int bWidgetY = winSize.y - layoutW*bWidgetH - 48;
 
-	for (int y = 0; y < 4; ++y)
-		for (int x = 0; x < 3; ++x)
-		{
-			int i = y*3+x;
-			BindingWidget w(i, p, IntRect(x*bWidgetW, bWidgetY+y*bWidgetH,
-			                              bWidgetW, bWidgetH));
-			p->bWidgets.push_back(w);
-		}
+	/* Widget i sits in slot i % pageSize of its page */
+	for (size_t i = 0; i < menuButtons.size(); ++i)
+	{
+		const int x = (i % pageSize) % layoutH;
+		const int y = (i % pageSize) / layoutH;
+		BindingWidget w(menuButtons[i], p, IntRect(x*bWidgetW, bWidgetY+y*bWidgetH,
+		                                           bWidgetW, bWidgetH));
+		p->bWidgets.push_back(w);
+	}
 
-	for (size_t i = 0; i< p->bWidgets.size(); ++i)
-		p->widgets.push_back(&p->bWidgets[i]);
+	p->pageCount = (menuButtons.size() + pageSize - 1) / pageSize;
 
 	BDescVec binds;
 	rtData.bindingUpdateMsg.get(binds);
@@ -980,18 +1270,20 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	p->buttons.push_back(Button(p, btRects[1], "Cancel", &SMP::onCancel));
 	p->buttons.push_back(Button(p, btRects[2], "Accept", &SMP::onAccept));
 
-	for (size_t i = 0; i< p->buttons.size(); ++i)
-		p->widgets.push_back(&p->buttons[i]);
+	if (p->pageCount > 1)
+	{
+		const int cx = winSize.x / 2;
+		p->buttons.push_back(Button(p, IntRect(cx-120, buttonY, 72, buttonH), "< Prev", &SMP::onPrevPage));
+		p->buttons.push_back(Button(p, IntRect(cx+48, buttonY, 72, buttonH), "Next >", &SMP::onNextPage));
+		p->pageLabel = Label(p, IntRect(cx-40, buttonY, 88, buttonH), p->pageStr, cText, cText, cText);
+	}
 
 	/* Labels */
-	const char *info = "Use left click to bind a slot, right click to clear its binding";
+	const char *info = "Click / A / Space: bind   Right click / X / Del: clear   Wheel / LB RB: page   Start / Enter: accept   B / Esc: cancel";
 	p->infoLabel = Label(p, IntRect(16, 6, winSize.x, 16), info, cText, cText, cText);
 
 	const char *warn = "Warning: Same physical key bound to multiple slots";
 	p->dupWarnLabel = Label(p, IntRect(16, 26, winSize.x, 16), warn, 255, 0, 0);
-
-	p->widgets.push_back(&p->infoLabel);
-	p->widgets.push_back(&p->dupWarnLabel);
 
 	p->hovered = 0;
 	p->captureDesc = 0;
@@ -999,11 +1291,12 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 
 	p->updateDuplicateStatus();
 
-	p->redraw();
+	p->setPage(0);
 }
 
 SettingsMenu::~SettingsMenu()
 {
+	p->stopCaptureTimer();
 	TTF_CloseFont(p->font);
 	SDL_DestroyWindow(p->window);
 
@@ -1012,6 +1305,19 @@ SettingsMenu::~SettingsMenu()
 
 bool SettingsMenu::onEvent(const SDL_Event &event)
 {
+	if (event.type == SMP::captureTimeoutEvent)
+	{
+		if (event.user.code == 0)
+			p->captureTimer = 0;
+		else
+			p->holdTimer = 0;
+
+		if (p->state == AwaitingInput && (event.user.code == 0 || p->holdPending))
+			p->cancelCapture();
+
+		return true;
+	}
+
 	/* First, check whether this event is for us */
 	switch (event.type)
 	{
@@ -1019,6 +1325,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	case SDL_MOUSEBUTTONDOWN :
 	case SDL_MOUSEBUTTONUP :
 	case SDL_MOUSEMOTION :
+	case SDL_MOUSEWHEEL :
 	case SDL_KEYDOWN :
 	case SDL_KEYUP :
 		/* We can do this because windowID has the same
@@ -1044,7 +1351,29 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	{
 	/* Ignore these event */
 	case SDL_MOUSEBUTTONUP :
+		return true;
+
+	/* A short Esc / pad B press during a capture binds it on release */
 	case SDL_KEYUP :
+		if (p->state == AwaitingInput && p->holdPending == 1 &&
+		    event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+		{
+			SourceDesc src;
+			src.type = Key;
+			src.d.scan = SDL_SCANCODE_ESCAPE;
+			p->commitCapture(src);
+		}
+		return true;
+
+	case SDL_CONTROLLERBUTTONUP :
+		if (p->state == AwaitingInput && p->holdPending == 2 &&
+		    event.cbutton.button == SDL_CONTROLLER_BUTTON_B)
+		{
+			SourceDesc src;
+			src.type = CButton;
+			src.d.cb = SDL_CONTROLLER_BUTTON_B;
+			p->commitCapture(src);
+		}
 		return true;
 
 	case SDL_WINDOWEVENT :
@@ -1081,14 +1410,43 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		p->onMotion(event.motion);
 		return true;
 
+	case SDL_MOUSEWHEEL:
+		if (event.wheel.y > 0)
+			p->onPrevPage();
+		else if (event.wheel.y < 0)
+			p->onNextPage();
+		return true;
+
 	case SDL_KEYDOWN:
 		if (p->state != AwaitingInput)
 		{
-			if (event.key.keysym.sym == SDLK_RETURN)
-				p->onAccept();
-			else if (event.key.keysym.sym == SDLK_ESCAPE)
-				p->onCancel();
+			switch (event.key.keysym.sym)
+			{
+			case SDLK_RETURN:    p->onAccept(); break;
+			case SDLK_ESCAPE:    p->onCancel(); break;
+			case SDLK_UP:        p->moveSelection(0, -1); break;
+			case SDLK_DOWN:      p->moveSelection(0, 1);  break;
+			case SDLK_LEFT:      p->moveSelection(-1, 0); break;
+			case SDLK_RIGHT:     p->moveSelection(1, 0);  break;
+			case SDLK_SPACE:     p->activateSelection(SDL_BUTTON_LEFT);  break;
+			case SDLK_DELETE:
+			case SDLK_BACKSPACE: p->activateSelection(SDL_BUTTON_RIGHT); break;
+			case SDLK_PAGEUP:    p->onPrevPage(); break;
+			case SDLK_PAGEDOWN:  p->onNextPage(); break;
+			default: break;
+			}
 
+			return true;
+		}
+
+		/* Holding the key that started the capture must not bind itself */
+		if (event.key.repeat)
+			return true;
+
+		/* Esc: bound on a short press (on release), held = cancel */
+		if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+		{
+			p->startHold(1);
 			return true;
 		}
 
@@ -1104,10 +1462,33 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			break;
 		}
 
+		/* Not a controller event: skip the controller cases below, which
+		 * would read the key event's fields as a button */
+		break;
+
 	case SDL_CONTROLLERBUTTONDOWN:
+		if (p->state != AwaitingInput)
+		{
+			p->onPadButton(event.cbutton.button);
+			return true;
+		}
+
+		/* Pad B: bound on a short press (on release), held = cancel */
+		if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B)
+		{
+			p->startHold(2);
+			return true;
+		}
+		break;
+
 	case SDL_CONTROLLERAXISMOTION:
 		if (p->state != AwaitingInput)
+		{
+			p->onPadAxis(event.caxis.axis, event.caxis.value);
 			return true;
+		}
+
+		p->trackStick(event.caxis.axis, event.caxis.value);
 		break;
 
 	case SDL_MOUSEBUTTONDOWN:

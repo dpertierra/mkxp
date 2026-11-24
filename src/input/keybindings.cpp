@@ -25,6 +25,8 @@
 #include "util.h"
 
 #include <stdio.h>
+#include <string.h>
+#include <algorithm>
 
 struct KbBindingData
 {
@@ -135,6 +137,114 @@ static void addAxisBinding(BDescVec &d, SDL_GameControllerAxis axis, AxisDir dir
 	d.push_back(desc);
 }
 
+/* Built-in keys that can be made remappable through "remappableKeys".
+ * They are fixed (static) bindings otherwise. */
+static const struct
+{
+	const char *id;
+	const char *name;
+	Input::ButtonCode code;
+	SDL_Scancode keys[2];
+} builtinExtras[] =
+{
+	{ "SHIFT", "Shift", Input::Shift, { SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RSHIFT } },
+	{ "CTRL",  "Ctrl",  Input::Ctrl,  { SDL_SCANCODE_LCTRL,  SDL_SCANCODE_RCTRL  } },
+	{ "ALT",   "Alt",   Input::Alt,   { SDL_SCANCODE_LALT,   SDL_SCANCODE_RALT   } },
+	{ "F5", "F5", Input::F5, { SDL_SCANCODE_F5, SDL_SCANCODE_UNKNOWN } },
+	{ "F6", "F6", Input::F6, { SDL_SCANCODE_F6, SDL_SCANCODE_UNKNOWN } },
+	{ "F7", "F7", Input::F7, { SDL_SCANCODE_F7, SDL_SCANCODE_UNKNOWN } },
+	{ "F8", "F8", Input::F8, { SDL_SCANCODE_F8, SDL_SCANCODE_UNKNOWN } },
+	{ "F9", "F9", Input::F9, { SDL_SCANCODE_F9, SDL_SCANCODE_UNKNOWN } }
+};
+
+static elementsN(builtinExtras);
+
+/* Ruby constants already taken by the engine; custom ids must not shadow them */
+static const char *reservedIds[] =
+{
+	"DOWN", "LEFT", "RIGHT", "UP", "A", "B", "C", "X", "Y", "Z", "L", "R",
+	"MOUSELEFT", "MOUSEMIDDLE", "MOUSERIGHT", "MOUSEX1", "MOUSEX2"
+};
+
+static elementsN(reservedIds);
+
+std::vector<ExtraAction> extraActions(const Config &conf)
+{
+	std::vector<ExtraAction> out;
+	int customCount = 0;
+
+	for (size_t i = 0; i < builtinExtrasN; ++i)
+	{
+		const auto &b = builtinExtras[i];
+
+		if (std::find(conf.remappableKeys.begin(), conf.remappableKeys.end(),
+		              b.id) == conf.remappableKeys.end())
+			continue;
+
+		ExtraAction a;
+		a.id = b.id;
+		a.name = b.name;
+		a.code = b.code;
+		a.builtin = true;
+		out.push_back(a);
+	}
+
+	for (const Config::CustomAction &c : conf.customActions)
+	{
+		bool clash = false;
+
+		for (size_t i = 0; i < reservedIdsN; ++i)
+			clash = clash || c.id == reservedIds[i];
+
+		for (size_t i = 0; i < builtinExtrasN; ++i)
+			clash = clash || c.id == builtinExtras[i].id;
+
+		if (clash || customCount > Input::CustomMax - Input::CustomBase)
+			continue;
+
+		ExtraAction a;
+		a.id = c.id;
+		a.name = c.name;
+		a.code = (Input::ButtonCode) (Input::CustomBase + customCount++);
+		a.builtin = false;
+		a.key = c.key;
+		a.button = c.button;
+		a.rawKey = c.rawKey;
+		out.push_back(a);
+	}
+
+	return out;
+}
+
+static void addExtraDefaults(BDescVec &d, const ExtraAction &a)
+{
+	if (a.builtin)
+	{
+		for (size_t i = 0; i < builtinExtrasN; ++i)
+		{
+			if (builtinExtras[i].code != a.code)
+				continue;
+
+			for (SDL_Scancode sc : builtinExtras[i].keys)
+				if (sc != SDL_SCANCODE_UNKNOWN)
+					KbBindingData{ sc, a.code }.add(d);
+		}
+		return;
+	}
+
+	std::string key = a.key, btn = a.button;
+	std::transform(key.begin(), key.end(), key.begin(), ::toupper);
+	std::transform(btn.begin(), btn.end(), btn.begin(), ::toupper);
+
+	auto k = strToScancode.find(key);
+	if (k != strToScancode.end())
+		KbBindingData{ (SDL_Scancode) k->second, a.code }.add(d);
+
+	auto b = strToGCButton.find(btn);
+	if (b != strToGCButton.end())
+		CtrlBindingData{ b->second, a.code }.add(d);
+}
+
 BDescVec genDefaultBindings(const Config &conf)
 {
 	BDescVec d;
@@ -157,10 +267,19 @@ BDescVec genDefaultBindings(const Config &conf)
 	addAxisBinding(d, SDL_CONTROLLER_AXIS_LEFTY, Negative, Input::Up   );
 	addAxisBinding(d, SDL_CONTROLLER_AXIS_LEFTY, Positive, Input::Down );
 
+	for (const ExtraAction &a : extraActions(conf))
+		addExtraDefaults(d, a);
+
 	return d;
 }
 
-#define FORMAT_VER 3
+/* File layout (v4): Header, then idCount x char[ID_LEN] (every extra action
+ * known when saving), then `count` BindingDescs. Custom targets are stored as
+ * CustomBase + index into that id table so reordering "customActions" in
+ * mkxp.json does not scramble saved bindings. v3 files have no id table. */
+#define FORMAT_VER 4
+#define FORMAT_VER_NO_IDS 3
+#define ID_LEN 32
 
 struct Header
 {
@@ -176,7 +295,7 @@ static void buildPath(const std::string &dir, uint32_t rgssVersion,
 }
 
 static bool writeBindings(const BDescVec &d, const std::string &dir,
-                          uint32_t rgssVersion)
+                          uint32_t rgssVersion, const std::vector<ExtraAction> &extras)
 {
 	if (dir.empty())
 		return false;
@@ -189,35 +308,42 @@ static bool writeBindings(const BDescVec &d, const std::string &dir,
 	if (!f)
 		return false;
 
+	BDescVec out = d;
+	for (BindingDesc &desc : out)
+		for (size_t i = 0; i < extras.size(); ++i)
+			if (!extras[i].builtin && desc.target == extras[i].code)
+				desc.target = (Input::ButtonCode) (Input::CustomBase + i);
+
 	Header hd;
 	hd.formVer = FORMAT_VER;
 	hd.rgssVer = rgssVersion;
-	hd.count = d.size();
+	hd.count = out.size();
+	uint32_t idCount = extras.size();
 
-	if (fwrite(&hd, sizeof(hd), 1, f) < 1)
+	bool ok = fwrite(&hd, sizeof(hd), 1, f) == 1 &&
+	          fwrite(&idCount, sizeof(idCount), 1, f) == 1;
+
+	for (size_t i = 0; ok && i < extras.size(); ++i)
 	{
-		fclose(f);
-		return false;
+		char id[ID_LEN] = {};
+		strncpy(id, extras[i].id.c_str(), ID_LEN - 1);
+		ok = fwrite(id, ID_LEN, 1, f) == 1;
 	}
 
-	if (fwrite(&d[0], sizeof(d[0]), hd.count, f) < hd.count)
-	{
-		fclose(f);
-		return false;
-	}
+	if (ok && hd.count > 0)
+		ok = fwrite(&out[0], sizeof(out[0]), hd.count, f) == hd.count;
 
 	fclose(f);
-	return true;
+	return ok;
 }
 
 void storeBindings(const BDescVec &d, const Config &conf)
 {
-    writeBindings(d, conf.customDataPath, conf.rgssVersion);
+    writeBindings(d, conf.customDataPath, conf.rgssVersion, extraActions(conf));
 }
 
-#define READ(ptr, size, n, f) if (fread(ptr, size, n, f) < n) return false
-
-static bool verifyDesc(const BindingDesc &desc)
+static bool verifyDesc(const BindingDesc &desc,
+                       const std::vector<ExtraAction> &extras)
 {
 	const Input::ButtonCode codes[] =
 	{
@@ -225,19 +351,19 @@ static bool verifyDesc(const BindingDesc &desc)
 	    Input::Down, Input::Left, Input::Right, Input::Up,
 	    Input::A, Input::B, Input::C,
 	    Input::X, Input::Y, Input::Z,
-	    Input::L, Input::R,
-	    Input::Shift, Input::Ctrl, Input::Alt,
-	    Input::F5, Input::F6, Input::F7, Input::F8, Input::F9
+	    Input::L, Input::R
 	};
 
 	elementsN(codes);
-	size_t i;
+	bool known = false;
 
-	for (i = 0; i < codesN; ++i)
-		if (desc.target == codes[i])
-			break;
+	for (size_t i = 0; i < codesN; ++i)
+		known = known || desc.target == codes[i];
 
-	if (i == codesN)
+	for (const ExtraAction &a : extras)
+		known = known || desc.target == a.code;
+
+	if (!known)
 		return false;
 
 	const SourceDesc &src = desc.src;
@@ -260,7 +386,7 @@ static bool verifyDesc(const BindingDesc &desc)
 }
 
 static bool readBindings(BDescVec &out, const std::string &dir,
-                         uint32_t rgssVersion)
+                         uint32_t rgssVersion, const std::vector<ExtraAction> &extras)
 {
 	if (dir.empty())
 		return false;
@@ -273,14 +399,13 @@ static bool readBindings(BDescVec &out, const std::string &dir,
 	if (!f)
 		return false;
 
+	struct Closer { FILE *f; ~Closer() { fclose(f); } } closer = { f };
+
 	Header hd;
 	if (fread(&hd, sizeof(hd), 1, f) < 1)
-	{
-		fclose(f);
 		return false;
-	}
 
-	if (hd.formVer != FORMAT_VER)
+	if (hd.formVer != FORMAT_VER && hd.formVer != FORMAT_VER_NO_IDS)
 		return false;
 	if (hd.rgssVer != rgssVersion)
 		return false;
@@ -288,16 +413,70 @@ static bool readBindings(BDescVec &out, const std::string &dir,
 	if (hd.count > 1024)
 		return false;
 
-	out.resize(hd.count);
-	if (fread(&out[0], sizeof(out[0]), hd.count, f) < hd.count)
+	std::vector<std::string> fileIds;
+
+	if (hd.formVer == FORMAT_VER)
 	{
-		fclose(f);
-		return false;
+		uint32_t idCount;
+		if (fread(&idCount, sizeof(idCount), 1, f) < 1 || idCount > 64)
+			return false;
+
+		for (uint32_t i = 0; i < idCount; ++i)
+		{
+			char id[ID_LEN + 1] = {};
+			if (fread(id, ID_LEN, 1, f) < 1)
+				return false;
+			fileIds.push_back(id);
+		}
 	}
 
-	for (size_t i = 0; i < hd.count; ++i)
-		if (!verifyDesc(out[i]))
+	BDescVec raw(hd.count);
+	if (hd.count > 0 && fread(&raw[0], sizeof(raw[0]), hd.count, f) < hd.count)
+		return false;
+
+	/* Re-target stored descs onto the current action codes. Descs whose
+	 * action no longer exists are dropped. */
+	out.clear();
+	for (BindingDesc desc : raw)
+	{
+		int t = desc.target;
+
+		if (t >= Input::CustomBase)
+		{
+			size_t idx = t - Input::CustomBase;
+			if (idx >= fileIds.size())
+				return false;
+
+			const ExtraAction *cur = 0;
+			for (const ExtraAction &a : extras)
+				if (!a.builtin && a.id == fileIds[idx])
+					cur = &a;
+
+			if (!cur)
+				continue;
+
+			desc.target = cur->code;
+		}
+		else if (t >= Input::Shift && t <= Input::F9)
+		{
+			bool active = false;
+			for (const ExtraAction &a : extras)
+				active = active || a.code == t;
+
+			if (!active)
+				continue;
+		}
+
+		if (!verifyDesc(desc, extras))
 			return false;
+
+		out.push_back(desc);
+	}
+
+	/* Actions added since the file was written get their defaults */
+	for (const ExtraAction &a : extras)
+		if (std::find(fileIds.begin(), fileIds.end(), a.id) == fileIds.end())
+			addExtraDefaults(out, a);
 
 	return true;
 }
@@ -306,7 +485,7 @@ BDescVec loadBindings(const Config &conf)
 {
 	BDescVec d;
 
-	if (readBindings(d, conf.customDataPath, conf.rgssVersion))
+	if (readBindings(d, conf.customDataPath, conf.rgssVersion, extraActions(conf)))
 		return d;
 
 	return genDefaultBindings(conf);

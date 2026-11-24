@@ -204,6 +204,9 @@ void Config::read(int argc, char *argv[]) {
         {"JITMinCalls", 10000},
         {"YJITEnable", false},
         {"dumpAtlas", false},
+        {"customActions", json::array({})},
+        {"remappableKeys", json::array({})},
+        {"settingsPadCombo", json::array({"BACK", "START"})},
         {"bindingNames", json::object({
             {"a", "A"},
             {"b", "B"},
@@ -349,6 +352,48 @@ try { exp } catch (...) {}
     BINDING_NAME(z);
     BINDING_NAME(l);
     BINDING_NAME(r);
+    
+    fillStringVec(opts["remappableKeys"], remappableKeys);
+    fillStringVec(opts["settingsPadCombo"], settingsPadCombo);
+    for (std::string &k : remappableKeys)
+        std::transform(k.begin(), k.end(), k.begin(),
+            [](unsigned char c) { return std::toupper(c); });
+    
+    // Max 32 actions (Input::CustomBase..CustomMax). The id becomes a Ruby
+    // constant, so only [A-Z][A-Z0-9_]* is accepted.
+    if (opts["customActions"].is_array()) {
+        auto &arr = opts["customActions"].as_array();
+        for (size_t i = 0; i < arr.size() && customActions.size() < 32; i++) {
+            if (!arr[i].is_object())
+                continue;
+            
+            auto &o = arr[i].as_object();
+            auto str = [&](const char *k) {
+                return (o.count(k) && o[k].is_string()) ? std::string(o[k].as_string()) : std::string();
+            };
+            
+            CustomAction a;
+            a.id = str("id");
+            a.name = str("name");
+            a.key = str("key");
+            a.button = str("button");
+            a.rawKey = str("rawKey");
+            if (a.name.empty())
+                a.name = a.id;
+            
+            bool valid = !a.id.empty() && isupper((unsigned char)a.id[0]);
+            for (char c : a.id)
+                valid = valid && (isupper((unsigned char)c) || isdigit((unsigned char)c) || c == '_');
+            for (const CustomAction &o2 : customActions)
+                valid = valid && o2.id != a.id;
+            
+            if (!valid) {
+                Debug() << "Invalid or duplicate customActions id:" << a.id;
+                continue;
+            }
+            customActions.push_back(a);
+        }
+    }
     
     rgssVersion = clamp(rgssVersion, 0, 3);
     SE.sourceCount = clamp(SE.sourceCount, 1, 64);
