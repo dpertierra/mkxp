@@ -119,6 +119,11 @@ static std::string singleSourceString(SourceType type, const SourceDesc::Data &d
 		return buf;
 
 	case CAxis:
+		/* Triggers only go one way, so a sign says nothing */
+		if (d.ca.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ||
+		    d.ca.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+			return shState->input().getAxisName(d.ca.axis);
+
 		snprintf(buf, sizeof(buf), "%s%c",
 		         shState->input().getAxisName(d.ca.axis), d.ca.dir == Negative ? '-' : '+');
 		return buf;
