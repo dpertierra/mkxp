@@ -493,16 +493,51 @@ struct KbBindingData
     Input::ButtonCode target;
 };
 
+/* Whether a single source is held right now (used for combo partners) */
+static bool sourceHeld(SourceType type, const SourceDesc::Data &d)
+{
+    switch (type)
+    {
+        case Key :
+            if (d.scan == SDL_SCANCODE_LSHIFT)
+                return EventThread::keyStates[d.scan]
+                || EventThread::keyStates[SDL_SCANCODE_RSHIFT];
+            
+            if (d.scan == SDL_SCANCODE_RETURN)
+                return EventThread::keyStates[d.scan]
+                || EventThread::keyStates[SDL_SCANCODE_KP_ENTER];
+            
+            return EventThread::keyStates[d.scan];
+        case CButton :
+            return EventThread::controllerState.buttons[d.cb];
+        case CAxis :
+        {
+            float val = EventThread::controllerState.axes[d.ca.axis];
+            return d.ca.dir == Negative ? val < -JAXIS_THRESHOLD : val > JAXIS_THRESHOLD;
+        }
+        default :
+            return false;
+    }
+}
+
 struct Binding
 {
     Binding(Input::ButtonCode target = Input::None)
-    : target(target)
+    : target(target), type2(Invalid)
     {}
     
     virtual bool sourceActive() const = 0;
     virtual bool sourceRepeatable() const = 0;
     
+    /* The source plus, for combos, its partner */
+    bool active() const
+    {
+        return sourceActive() && (type2 == Invalid || sourceHeld(type2, d2));
+    }
+    
     Input::ButtonCode target;
+    SourceType type2;
+    SourceDesc::Data d2;
 };
 
 /* Keyboard binding */
@@ -962,6 +997,8 @@ struct InputPrivate
                     KbBinding bind;
                     bind.source = src.d.scan;
                     bind.target = desc.target;
+                    bind.type2 = src.type2;
+                    bind.d2 = src.d2;
                     kbBindings.push_back(bind);
                     
                     break;
@@ -972,6 +1009,8 @@ struct InputPrivate
                     bind.source = src.d.ca.axis;
                     bind.dir = src.d.ca.dir;
                     bind.target = desc.target;
+                    bind.type2 = src.type2;
+                    bind.d2 = src.d2;
                     ctrlABindings.push_back(bind);
                     
                     break;
@@ -981,6 +1020,8 @@ struct InputPrivate
                     CtrlButtonBinding bind;
                     bind.source = src.d.cb;
                     bind.target = desc.target;
+                    bind.type2 = src.type2;
+                    bind.d2 = src.d2;
                     ctrlBBindings.push_back(bind);
                     
                     break;
@@ -1074,7 +1115,7 @@ struct InputPrivate
     void pollBindingPriv(const Binding &b,
                          Input::ButtonCode &repeatCand)
     {
-        if (!b.sourceActive())
+        if (!b.active())
             return;
         
         if (b.target == Input::None)

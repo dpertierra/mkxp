@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string>
+#include <string.h>
 #include <vector>
 
 enum AxisDir
@@ -64,25 +65,42 @@ struct SourceDesc
 		} ca;
 	} d;
 
-	bool operator==(const SourceDesc &o) const
-	{
-		if (type != o.type)
-			return false;
+	/* Optional second source: when set the binding is a combo and both
+	 * sources have to be held (in any order) */
+	SourceType type2;
+	Data d2;
 
-		switch (type)
+	SourceDesc()
+	    : type(Invalid), type2(Invalid)
+	{
+		memset(&d, 0, sizeof(d));
+		memset(&d2, 0, sizeof(d2));
+	}
+
+	void clear() { *this = SourceDesc(); }
+
+	static bool sameData(SourceType t, const Data &a, const Data &b)
+	{
+		switch (t)
 		{
 		case Invalid:
 			return true;
 		case Key:
-			return d.scan == o.d.scan;
-        case CButton:
-            return d.cb == o.d.cb;
+			return a.scan == b.scan;
+		case CButton:
+			return a.cb == b.cb;
 		case CAxis:
-			return (d.ca.axis == o.d.ca.axis) && (d.ca.dir == o.d.ca.dir);
+			return (a.ca.axis == b.ca.axis) && (a.ca.dir == b.ca.dir);
 		default:
 			assert(!"unreachable");
 			return false;
 		}
+	}
+
+	bool operator==(const SourceDesc &o) const
+	{
+		return type == o.type && type2 == o.type2
+		    && sameData(type, d, o.d) && sameData(type2, d2, o.d2);
 	}
 
 	bool operator!=(const SourceDesc &o) const

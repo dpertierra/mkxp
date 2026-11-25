@@ -91,23 +91,22 @@ struct MenuButton
 /* Actions per page: 3 columns x 4 rows */
 const size_t pageSize = 12;
 
-/* Human readable string representation */
-std::string sourceDescString(const SourceDesc &src)
+/* Human readable string representation of one source */
+static std::string singleSourceString(SourceType type, const SourceDesc::Data &d)
 {
 	char buf[128];
-	//char pos;
 
-	switch (src.type)
+	switch (type)
 	{
 	case Invalid:
 		return std::string();
 
 	case Key:
 	{
-		if (src.d.scan == SDL_SCANCODE_LSHIFT)
+		if (d.scan == SDL_SCANCODE_LSHIFT)
 			return "Shift";
 
-		SDL_Keycode key = SDL_GetKeyFromScancode(src.d.scan);
+		SDL_Keycode key = SDL_GetKeyFromScancode(d.scan);
 		const char *str = SDL_GetKeyName(key);
 
 		if (*str == '\0')
@@ -116,17 +115,28 @@ std::string sourceDescString(const SourceDesc &src)
 			return str;
 	}
 	case CButton:
-		snprintf(buf, sizeof(buf), "%s", shState->input().getButtonName(src.d.cb));
+		snprintf(buf, sizeof(buf), "%s", shState->input().getButtonName(d.cb));
 		return buf;
 
 	case CAxis:
 		snprintf(buf, sizeof(buf), "%s%c",
-		         shState->input().getAxisName(src.d.ca.axis), src.d.ca.dir == Negative ? '-' : '+');
+		         shState->input().getAxisName(d.ca.axis), d.ca.dir == Negative ? '-' : '+');
 		return buf;
 	}
 
 	assert(!"unreachable");
 	return "";
+}
+
+/* Combos read "first+second" */
+std::string sourceDescString(const SourceDesc &src)
+{
+	std::string str = singleSourceString(src.type, src.d);
+
+	if (src.type2 != Invalid)
+		str += "+" + singleSourceString(src.type2, src.d2);
+
+	return str;
 }
 
 struct Widget
@@ -296,6 +306,9 @@ struct SettingsMenuPrivate
 	size_t firstButton; /* index in `buttons` of the page buttons, if any */
 
 	SourceDesc *captureDesc;
+	/* First source of a possible combo, held down during a capture */
+	SourceDesc capFirst;
+	bool capHave;
 	const char *captureName;
 
 	/* Controller / keyboard navigation: every clickable spot on the page
@@ -321,7 +334,7 @@ struct SettingsMenuPrivate
 	static Uint32 captureTimeoutEvent;
 
 	SettingsMenuPrivate(RGSSThreadData &rtData)
-	    : rtData(rtData), navSel(0), stickDir{0, 0}, captureTimer(0), holdPending(0), holdTimer(0)
+	    : rtData(rtData), navSel(0), stickDir{0, 0}, capHave(false), captureTimer(0), holdPending(0), holdTimer(0)
 	{}
 
 	SDL_Surface *createSurface(int w, int h)
@@ -484,7 +497,7 @@ struct SettingsMenuPrivate
 
 		for (size_t i = 0; i < bWidgets.size(); ++i)
 			for (size_t j = 0; j < 4; ++j)
-				bWidgets[i].src[j].type = Invalid;
+				bWidgets[i].src[j].clear();
 
 		for (size_t i = 0; i < d.size(); ++i)
 		{
@@ -575,7 +588,11 @@ struct SettingsMenuPrivate
 		if (state == AwaitingInput)
 		{
 			char buf[192];
-			snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (hold Esc / B or wait 5 s to cancel)", captureName);
+			if (capHave)
+				snprintf(buf, sizeof(buf), "\"%s\": %s held - press a second key / button for a combo, or release to bind just this one",
+				         captureName, sourceDescString(capFirst).c_str());
+			else
+				snprintf(buf, sizeof(buf), "Press key or joystick button for \"%s\" (hold one and press another for a combo; hold Esc / B or wait 5 s to cancel)", captureName);
 
 			drawOff = Vec2i();
 
@@ -661,55 +678,97 @@ struct SettingsMenuPrivate
 			hovered->motion(e.x, e.y);
 	}
 
+	/* A source went down (or up) while capturing. Binding happens on
+	 * release of a lone source, or as soon as a second one joins it */
+	void onCaptureSource(const SourceDesc &got, bool down)
+	{
+		if (down)
+		{
+			if (!capHave)
+			{
+				capFirst = got;
+				capHave = true;
+
+				/* Fresh 5 s for finding the second input */
+				if (captureTimer)
+					SDL_RemoveTimer(captureTimer);
+				captureTimer = SDL_AddTimer(5000, onCaptureTimeout, 0);
+				redraw();
+				return;
+			}
+
+			if (got == capFirst)
+				return;
+
+			SourceDesc combo = capFirst;
+			combo.type2 = got.type;
+			combo.d2 = got.d;
+			commitCapture(combo);
+			return;
+		}
+
+		if (capHave && got == capFirst)
+			commitCapture(capFirst);
+	}
+
+	static SourceDesc keySource(SDL_Scancode scan)
+	{
+		SourceDesc src;
+		src.type = Key;
+		src.d.scan = scan;
+
+		/* Special case aliases */
+		if (scan == SDL_SCANCODE_RSHIFT)
+			src.d.scan = SDL_SCANCODE_LSHIFT;
+
+		if (scan == SDL_SCANCODE_KP_ENTER)
+			src.d.scan = SDL_SCANCODE_RETURN;
+
+		return src;
+	}
+
 	bool onCaptureInputEvent(const SDL_Event &event)
 	{
 		assert(captureDesc);
-		SourceDesc &desc = *captureDesc;
+		SourceDesc got;
 
 		switch (event.type)
 		{
 		case SDL_KEYDOWN:
-			desc.type = Key;
-			desc.d.scan = event.key.keysym.scancode;
-
-			/* Special case aliases */
-			if (desc.d.scan == SDL_SCANCODE_RSHIFT)
-				desc.d.scan = SDL_SCANCODE_LSHIFT;
-
-			if (desc.d.scan == SDL_SCANCODE_KP_ENTER)
-				desc.d.scan = SDL_SCANCODE_RETURN;
-
-			break;
+		case SDL_KEYUP:
+			onCaptureSource(keySource(event.key.keysym.scancode),
+			                event.type == SDL_KEYDOWN);
+			return true;
 
 		case SDL_CONTROLLERBUTTONDOWN:
-			desc.type = CButton;
-			desc.d.cb = (SDL_GameControllerButton)event.cbutton.button;
-			break;
+		case SDL_CONTROLLERBUTTONUP:
+			got.type = CButton;
+			got.d.cb = (SDL_GameControllerButton)event.cbutton.button;
+			onCaptureSource(got, event.type == SDL_CONTROLLERBUTTONDOWN);
+			return true;
 
 		case SDL_CONTROLLERAXISMOTION:
 		{
 			int v = event.caxis.value;
+			got.type = CAxis;
+			got.d.ca.axis = (SDL_GameControllerAxis)event.caxis.axis;
 
-			/* Only register if pushed halfway through */
+			/* Back inside the dead zone: release of whichever
+			 * direction was held */
 			if (v > -JAXIS_THRESHOLD && v < JAXIS_THRESHOLD)
+			{
+				if (capHave && capFirst.type == CAxis && capFirst.d.ca.axis == got.d.ca.axis)
+					commitCapture(capFirst);
 				return true;
+			}
 
-			desc.type = CAxis;
-			desc.d.ca.axis = (SDL_GameControllerAxis)event.caxis.axis;
-			desc.d.ca.dir = v < 0 ? Negative : Positive;
-			break;
+			got.d.ca.dir = v < 0 ? Negative : Positive;
+			onCaptureSource(got, true);
+			return true;
 		}
 		default:
 			return false;
 		}
-
-		stopCaptureTimer();
-		captureDesc = 0;
-		state = Idle;
-		updateDuplicateStatus();
-		redraw();
-
-		return true;
 	}
 
 	void onBWidgetCellClicked(SourceDesc &desc, const char *str, uint8_t button)
@@ -728,7 +787,7 @@ struct SettingsMenuPrivate
 		else /* e.button == SDL_BUTTON_RIGHT */
 		{
 			/* Clear binding */
-			desc.type = Invalid;
+			desc.clear();
 		}
 
 		updateDuplicateStatus();
@@ -895,6 +954,7 @@ struct SettingsMenuPrivate
 			SDL_RemoveTimer(holdTimer);
 		captureTimer = holdTimer = 0;
 		holdPending = 0;
+		capHave = false;
 	}
 
 	void cancelCapture()
@@ -1363,6 +1423,8 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			src.d.scan = SDL_SCANCODE_ESCAPE;
 			p->commitCapture(src);
 		}
+		else if (p->state == AwaitingInput)
+			p->onCaptureInputEvent(event);
 		return true;
 
 	case SDL_CONTROLLERBUTTONUP :
@@ -1374,6 +1436,8 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			src.d.cb = SDL_CONTROLLER_BUTTON_B;
 			p->commitCapture(src);
 		}
+		else if (p->state == AwaitingInput)
+			p->onCaptureInputEvent(event);
 		return true;
 
 	case SDL_WINDOWEVENT :
@@ -1444,7 +1508,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			return true;
 
 		/* Esc: bound on a short press (on release), held = cancel */
-		if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+		if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && !p->capHave)
 		{
 			p->startHold(1);
 			return true;
@@ -1474,7 +1538,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		}
 
 		/* Pad B: bound on a short press (on release), held = cancel */
-		if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B)
+		if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B && !p->capHave)
 		{
 			p->startHold(2);
 			return true;

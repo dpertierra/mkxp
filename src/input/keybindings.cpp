@@ -273,11 +273,12 @@ BDescVec genDefaultBindings(const Config &conf)
 	return d;
 }
 
-/* File layout (v4): Header, then idCount x char[ID_LEN] (every extra action
+/* File layout (v5; v4 records have no second source): Header, then idCount x char[ID_LEN] (every extra action
  * known when saving), then `count` BindingDescs. Custom targets are stored as
  * CustomBase + index into that id table so reordering "customActions" in
  * mkxp.json does not scramble saved bindings. v3 files have no id table. */
-#define FORMAT_VER 4
+#define FORMAT_VER 5
+#define FORMAT_VER_SINGLE 4 /* v4: 16-byte records, no combo source */
 #define FORMAT_VER_NO_IDS 3
 #define ID_LEN 32
 
@@ -342,6 +343,23 @@ void storeBindings(const BDescVec &d, const Config &conf)
     writeBindings(d, conf.customDataPath, conf.rgssVersion, extraActions(conf));
 }
 
+static bool verifySource(SourceType type, const SourceDesc::Data &d)
+{
+	switch (type)
+	{
+	case Invalid:
+		return true;
+	case Key:
+		return d.scan < SDL_NUM_SCANCODES;
+	case CButton:
+		return true;
+	case CAxis:
+		return d.ca.dir == Negative || d.ca.dir == Positive;
+	default:
+		return false;
+	}
+}
+
 static bool verifyDesc(const BindingDesc &desc,
                        const std::vector<ExtraAction> &extras)
 {
@@ -368,21 +386,14 @@ static bool verifyDesc(const BindingDesc &desc,
 
 	const SourceDesc &src = desc.src;
 
-	switch (src.type)
-	{
-	case Invalid:
-		return true;
-	case Key:
-		return src.d.scan < SDL_NUM_SCANCODES;
-            
-    case CButton:
-        return true;
-
-	case CAxis:
-		return src.d.ca.dir == Negative || src.d.ca.dir == Positive;
-	default:
+	if (!verifySource(src.type, src.d))
 		return false;
-	}
+
+	/* A combo needs a real first source */
+	if (src.type2 != Invalid && src.type == Invalid)
+		return false;
+
+	return verifySource(src.type2, src.d2);
 }
 
 static bool readBindings(BDescVec &out, const std::string &dir,
@@ -405,7 +416,8 @@ static bool readBindings(BDescVec &out, const std::string &dir,
 	if (fread(&hd, sizeof(hd), 1, f) < 1)
 		return false;
 
-	if (hd.formVer != FORMAT_VER && hd.formVer != FORMAT_VER_NO_IDS)
+	if (hd.formVer != FORMAT_VER && hd.formVer != FORMAT_VER_SINGLE &&
+	    hd.formVer != FORMAT_VER_NO_IDS)
 		return false;
 	if (hd.rgssVer != rgssVersion)
 		return false;
@@ -415,7 +427,7 @@ static bool readBindings(BDescVec &out, const std::string &dir,
 
 	std::vector<std::string> fileIds;
 
-	if (hd.formVer == FORMAT_VER)
+	if (hd.formVer != FORMAT_VER_NO_IDS)
 	{
 		uint32_t idCount;
 		if (fread(&idCount, sizeof(idCount), 1, f) < 1 || idCount > 64)
@@ -431,8 +443,33 @@ static bool readBindings(BDescVec &out, const std::string &dir,
 	}
 
 	BDescVec raw(hd.count);
-	if (hd.count > 0 && fread(&raw[0], sizeof(raw[0]), hd.count, f) < hd.count)
-		return false;
+
+	if (hd.formVer == FORMAT_VER)
+	{
+		if (hd.count > 0 && fread(&raw[0], sizeof(raw[0]), hd.count, f) < hd.count)
+			return false;
+	}
+	else
+	{
+		/* Older files: single-source records */
+		struct OldDesc
+		{
+			SourceType type;
+			SourceDesc::Data d;
+			Input::ButtonCode target;
+		};
+
+		std::vector<OldDesc> old(hd.count);
+		if (hd.count > 0 && fread(&old[0], sizeof(old[0]), hd.count, f) < hd.count)
+			return false;
+
+		for (uint32_t i = 0; i < hd.count; ++i)
+		{
+			raw[i].src.type = old[i].type;
+			raw[i].src.d = old[i].d;
+			raw[i].target = old[i].target;
+		}
+	}
 
 	/* Re-target stored descs onto the current action codes. Descs whose
 	 * action no longer exists are dropped. */
