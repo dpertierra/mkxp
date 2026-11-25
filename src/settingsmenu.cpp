@@ -1101,12 +1101,22 @@ void BindingWidget::drawHandler(SDL_Surface *surf)
 	/* Draw binding labels */
 	for (size_t i = 0; i < 4; ++i)
 	{
-		std::string lb = sourceDescString(src[i]);
+		std::string lb = singleSourceString(src[i].type, src[i].d);
 		if (lb.empty())
 			continue;
 
 		const int x = lbOff[i*2+0];
 		const int y = lbOff[i*2+1];
+
+		/* Combos don't fit on one line: first source above, "+second" below */
+		if (src[i].type2 != Invalid)
+		{
+			const std::string lb2 = "+" + singleSourceString(src[i].type2, src[i].d2);
+			p->drawText(surf, lb.c_str(), cellOffX+x+1, y-cellH/4, cellW-2, Center);
+			p->drawText(surf, lb2.c_str(), cellOffX+x+1, y+cellH/4, cellW-2, Center);
+			continue;
+		}
+
 		p->drawText(surf, lb.c_str(), cellOffX+x+1, y, cellW-2, Center);
 	}
 
