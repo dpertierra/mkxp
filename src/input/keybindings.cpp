@@ -232,17 +232,53 @@ static void addExtraDefaults(BDescVec &d, const ExtraAction &a)
 		return;
 	}
 
-	std::string key = a.key, btn = a.button;
-	std::transform(key.begin(), key.end(), key.begin(), ::toupper);
-	std::transform(btn.begin(), btn.end(), btn.begin(), ::toupper);
+	/* "key" / "button" may be a combo written "SHIFT+F" */
+	auto parse = [](std::string str, SourceType type, SourceDesc &out) -> bool
+	{
+		std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 
-	auto k = strToScancode.find(key);
-	if (k != strToScancode.end())
-		KbBindingData{ (SDL_Scancode) k->second, a.code }.add(d);
+		size_t plus = str.find('+', 1);
+		std::string parts[2] = { str.substr(0, plus),
+		                         plus == std::string::npos ? "" : str.substr(plus + 1) };
 
-	auto b = strToGCButton.find(btn);
-	if (b != strToGCButton.end())
-		CtrlBindingData{ b->second, a.code }.add(d);
+		for (int i = 0; i < 2; ++i)
+		{
+			if (i == 1 && plus == std::string::npos)
+				break;
+
+			SourceType &t = i ? out.type2 : out.type;
+			SourceDesc::Data &d = i ? out.d2 : out.d;
+
+			if (type == Key)
+			{
+				auto k = strToScancode.find(parts[i]);
+				if (k == strToScancode.end())
+					return false;
+				t = Key;
+				d.scan = (SDL_Scancode) k->second;
+			}
+			else
+			{
+				auto b = strToGCButton.find(parts[i]);
+				if (b == strToGCButton.end())
+					return false;
+				t = CButton;
+				d.cb = b->second;
+			}
+		}
+
+		return true;
+	};
+
+	BindingDesc desc;
+	desc.target = a.code;
+
+	if (parse(a.key, Key, desc.src))
+		d.push_back(desc);
+
+	desc.src.clear();
+	if (parse(a.button, CButton, desc.src))
+		d.push_back(desc);
 }
 
 BDescVec genDefaultBindings(const Config &conf)

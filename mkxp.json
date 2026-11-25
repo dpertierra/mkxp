@@ -587,8 +587,13 @@
     // player's remapped keys and controller buttons. Leave "key" out if it
     // would be the same physical key as "rawKey", to avoid a double trigger.
     //
+    // "key" and "button" can also be a combo of two, held together, written
+    // with a "+": "key": "LSHIFT+F", "button": "LEFTSHOULDER+A". Players can
+    // bind combos themselves in the F1 menu too.
+    //
     // "customActions": [
     //   { "id": "TURBO", "name": "Turbo", "key": "TAB", "button": "BACK" },
+    //   { "id": "MAP", "name": "Map", "key": "LSHIFT+M", "button": "LEFTSHOULDER+Y" },
     //   { "id": "SEARCH", "name": "Search (F)", "button": "Y", "rawKey": "F" },
     //   { "id": "QUICK_MAP", "name": "Quick map" }
     // ],
