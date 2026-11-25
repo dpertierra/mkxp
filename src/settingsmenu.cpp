@@ -134,7 +134,7 @@ std::string sourceDescString(const SourceDesc &src)
 	std::string str = singleSourceString(src.type, src.d);
 
 	if (src.type2 != Invalid)
-		str += "+" + singleSourceString(src.type2, src.d2);
+		str += " & " + singleSourceString(src.type2, src.d2);
 
 	return str;
 }
@@ -1111,7 +1111,7 @@ void BindingWidget::drawHandler(SDL_Surface *surf)
 		/* Combos don't fit on one line: first source above, "+second" below */
 		if (src[i].type2 != Invalid)
 		{
-			const std::string lb2 = "+" + singleSourceString(src[i].type2, src[i].d2);
+			const std::string lb2 = "& " + singleSourceString(src[i].type2, src[i].d2);
 			p->drawText(surf, lb.c_str(), cellOffX+x+1, y-cellH/4, cellW-2, Center);
 			p->drawText(surf, lb2.c_str(), cellOffX+x+1, y+cellH/4, cellW-2, Center);
 			continue;
