@@ -39,7 +39,7 @@
 #include <algorithm>
 #include <assert.h>
 
-const Vec2i winSize(960, 356);
+const Vec2i winSize(960, 420);
 
 const uint8_t cBgNorm = 50;
 const uint8_t cBgDark = 20;
@@ -1306,7 +1306,7 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	assert(layoutW*layoutH == pageSize);
 
 	const int bWidgetW = winSize.x / layoutH;
-	const int bWidgetH = 64;
+	const int bWidgetH = 80;
 	const int bWidgetY = winSize.y - layoutW*bWidgetH - 48;
 
 	/* Widget i sits in slot i % pageSize of its page */
